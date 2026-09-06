@@ -1,0 +1,38 @@
+# Python 3.12 — xem README.md
+# Cài: python -m venv .venv && .venv\Scripts\activate && pip install -r requirements.txt
+
+# --- Lõi ML (Bạn B) ---
+pandas==2.2.3
+numpy==1.26.4
+scikit-learn==1.5.2
+scipy==1.13.1
+matplotlib==3.9.2
+joblib==1.4.2
+
+# EDA / notebook
+jupyter==1.1.1
+notebook==7.2.2
+ipykernel==6.29.5
+
+# So sánh mô hình (tuần 3)
+xgboost==2.1.1
+
+# --- Luật Override (Bạn B) ---
+python-whois==0.9.5        # Override #1 fallback WHOIS
+requests==2.32.3           # RDAP qua HTTP, IANA bootstrap
+python-Levenshtein==0.25.1 # Override #3 typosquatting
+tldextract==5.1.2          # tách domain/subdomain/tld
+cryptography==43.0.1       # Override #2 đọc chứng chỉ SSL/TLS
+
+# --- Backend API (Bạn A — liệt kê để môi trường chung đủ chạy orchestrator) ---
+fastapi==0.115.2
+uvicorn[standard]==0.31.1
+pydantic==2.9.2
+httpx==0.27.2
+
+# --- RAG / Ollama (Bạn A) ---
+chromadb==0.5.13
+ollama==0.3.3
+
+# --- Kiểm thử ---
+pytest==8.3.3

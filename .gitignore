@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+
+# Dữ liệu sinh ra / mô hình đã train (không commit, tái tạo được từ notebook)
+models/*.joblib
+models/*.pkl
+reports/eda/*.png
+reports/eda/*.csv
+reports/eda/*.json
+!reports/eda/.gitkeep
+!models/.gitkeep
+
+# Dataset lớn tải thêm (giữ dataset_phishing.csv gốc)
+Dataset/reference/
+Dataset/external/
+Dataset/simulated/
+
+# Script trích đặc trưng gốc tải từ Mendeley (bản quyền tác giả — không redistribute)
+src/features/hannousse_yahiouche/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Bí mật
+.env
+*.key
