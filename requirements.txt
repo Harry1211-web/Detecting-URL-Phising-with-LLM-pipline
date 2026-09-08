@@ -14,8 +14,9 @@ jupyter==1.1.1
 notebook==7.2.2
 ipykernel==6.29.5
 
-# So sánh mô hình (tuần 3)
-xgboost==2.1.1
+# So sánh mô hình (tuần 3) — cần >=2.1.2 để hợp lệ với scikit-learn 1.8
+# (bản 2.1.1 bị sklearn 1.8 nhận nhầm là regressor → roc_auc scorer hỏng).
+xgboost==3.4.1
 
 # --- Luật Override (Bạn B) ---
 python-whois==0.9.5        # Override #1 fallback WHOIS

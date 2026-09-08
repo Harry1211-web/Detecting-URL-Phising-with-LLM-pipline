@@ -84,12 +84,36 @@ CONSTANT_FEATURES_CLAUDE_MD: tuple[str, ...] = (
 STRONGEST_SIGNAL_FEATURE = "google_index"
 
 # Tập đặc trưng đưa vào Random Forest v1 (Tuần 2): 87 - 6 cột hằng số = 81.
-# Danh sách CUỐI CÙNG sau feature selection (~30-42 đặc trưng) sẽ là
-# MODEL_FEATURES_FINAL, chốt ở Tuần 3.
 MODEL_FEATURES_V1: tuple[str, ...] = tuple(
     f for f in FEATURE_NAMES if f not in set(CONSTANT_FEATURES_DATASET_B)
 )
 assert len(MODEL_FEATURES_V1) == 81, len(MODEL_FEATURES_V1)
+
+# Tập đặc trưng CUỐI CÙNG sau feature selection (Tuần 3) — kết quả
+# `python -m src.feature_selection`: mốc top-30 (theo importance RF v1) là tập
+# NHỎ NHẤT trong khoảng 30-42 mà ROC-AUC 5-fold còn trong dung sai 0.002 so với
+# mốc dùng cả 81 đặc trưng (0.99235 vs 0.99353). Xem
+# reports/rf_final/feature_selection.csv + selected_features.json.
+MODEL_FEATURES_FINAL: tuple[str, ...] = (
+    "length_url", "length_hostname", "nb_dots", "nb_hyphens", "nb_slash",
+    "nb_www", "ratio_digits_url", "ratio_digits_host", "length_words_raw",
+    "char_repeat", "shortest_word_host", "shortest_word_path", "longest_words_raw",
+    "longest_word_path", "avg_words_raw", "avg_word_host", "avg_word_path",
+    "phish_hints", "nb_hyperlinks", "ratio_intHyperlinks", "ratio_extHyperlinks",
+    "ratio_extRedirection", "links_in_tags", "safe_anchor", "domain_in_title",
+    "domain_registration_length", "domain_age", "web_traffic", "google_index",
+    "page_rank",
+)
+assert len(MODEL_FEATURES_FINAL) == 30, len(MODEL_FEATURES_FINAL)
+assert set(MODEL_FEATURES_FINAL) <= set(MODEL_FEATURES_V1), "đặc trưng lạ trong FINAL"
+
+# Bản "chỉ đặc trưng nhanh" (nhánh fallback khi RDAP/WHOIS/Google timeout —
+# rủi ro #1 trong reports/rf_v1/BAO_CAO_RF_V1.md): bỏ 5 đặc trưng tra cứu ngoài
+# có mặt trong FINAL. Còn 25 đặc trưng lexical + nội dung, tính không cần mạng.
+FAST_FEATURES_FINAL: tuple[str, ...] = tuple(
+    f for f in MODEL_FEATURES_FINAL if f not in set(EXTERNAL_FEATURES)
+)
+assert len(FAST_FEATURES_FINAL) == 25, len(FAST_FEATURES_FINAL)
 
 # Giá trị "không tra được" mà script gốc điền cho nhóm đặc trưng ngoài.
 # Không phải NaN — là -1 (hoặc 0 tuỳ đặc trưng). Xử lý ở bước tiền xử lý, không
