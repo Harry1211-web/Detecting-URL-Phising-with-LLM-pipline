@@ -83,6 +83,14 @@ CONSTANT_FEATURES_CLAUDE_MD: tuple[str, ...] = (
 # Đặc trưng tương quan mạnh nhất với nhãn theo CLAUDE.md (~0.73) — EDA xác nhận.
 STRONGEST_SIGNAL_FEATURE = "google_index"
 
+# Tập đặc trưng đưa vào Random Forest v1 (Tuần 2): 87 - 6 cột hằng số = 81.
+# Danh sách CUỐI CÙNG sau feature selection (~30-42 đặc trưng) sẽ là
+# MODEL_FEATURES_FINAL, chốt ở Tuần 3.
+MODEL_FEATURES_V1: tuple[str, ...] = tuple(
+    f for f in FEATURE_NAMES if f not in set(CONSTANT_FEATURES_DATASET_B)
+)
+assert len(MODEL_FEATURES_V1) == 81, len(MODEL_FEATURES_V1)
+
 # Giá trị "không tra được" mà script gốc điền cho nhóm đặc trưng ngoài.
 # Không phải NaN — là -1 (hoặc 0 tuỳ đặc trưng). Xử lý ở bước tiền xử lý, không
 # coi -1 là giá trị số bình thường.

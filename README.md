@@ -12,13 +12,16 @@
 ```
 Dataset/train/dataset_phishing.csv   # Hannousse & Yahiouche 2020, 11.430 × 89
 docs/interface_contract.md           # hợp đồng /check-url + contract nội bộ (chốt Tuần 1)
-src/contracts.py                     # NGUỒN CHÂN LÝ: tên/thứ tự 87 đặc trưng, kiểu dữ liệu, phan_vung()
-src/eda.py                           # EDA dataset (Tuần 1, Bạn B)
+src/contracts.py                     # NGUỒN CHÂN LÝ: tên/thứ tự 87 đặc trưng, MODEL_FEATURES_V1, phan_vung()
+src/eda.py                           # EDA dataset (Tuần 1)
+src/train_rf.py                      # train Random Forest v1 (Tuần 2)
 src/features/                        # trích 87 đặc trưng — README + trial_extract.py
+src/override/                        # brands_vn.json (62 brand) + brands.py loader (Tuần 2)
 notebooks/01_eda_dataset_phishing.ipynb
-reports/eda/                         # output EDA (bảng, biểu đồ, BAO_CAO_EDA.md)
-tests/                               # kiểm hợp đồng interface
-models/                             # mô hình đã train (gitignore)
+notebooks/02_train_rf_v1.ipynb
+reports/eda/  reports/rf_v1/          # output + BAO_CAO_*.md (binary gitignore, .md giữ)
+tests/                               # kiểm hợp đồng interface + danh sách brand
+models/rf_v1.joblib                  # mô hình đã train (gitignore)
 ```
 
 ## Thiết lập
@@ -36,6 +39,8 @@ Python 3.12. Toàn bộ tài liệu / comment / output bằng **tiếng Việt**
 
 ```bash
 python -m src.eda                                  # sinh lại reports/eda/
+python -m src.train_rf                              # train RF v1 -> reports/rf_v1/ + models/rf_v1.joblib
+python -m src.override.brands                       # kiểm danh sách brand VN
 jupyter notebook notebooks/01_eda_dataset_phishing.ipynb
 python -m src.features.trial_extract --smoke https://www.vietcombank.com.vn/
 python -m pytest -q                                # (cần: pip install pytest)
@@ -46,7 +51,7 @@ python -m pytest -q                                # (cần: pip install pytest)
 | Tuần | Bạn A (CNPM) | Bạn B (ML + Cyber) |
 |---|---|---|
 | **1** | scaffold FastAPI, cài Ollama, scaffold Extension MV3 | ✅ EDA dataset · scaffold repo/contract · trial trích đặc trưng |
-| 2 | orchestrator + wiring 87 đặc trưng + cache 24h | train RF v1 (GridSearchCV, k-fold) · bắt đầu list brand VN |
+| **2** | orchestrator + wiring 87 đặc trưng + cache 24h | ✅ train RF v1 (GridSearchCV k-fold, ROC-AUC 0,993) · ✅ list brand VN (62 domain) |
 | 3 | client Ollama + hạ tầng RAG | feature selection + RF cuối · Override #1 (tuổi domain) |
 | 4 | job blocklist DNR | Override #2 (SSL) + #3 (typosquatting) · hàm phân vùng |
 | 5 | tích hợp #1 · Extension Lớp B | nạp kho RAG Tầng 2 · ghép RAG vào prompt |
@@ -67,3 +72,14 @@ Chi tiết: `Plan.md` mục 3.
   train; Override #1 phải trả `"unknown"`, không mặc định an toàn.
 - 3/4 đặc trưng mạnh nhất thuộc nhóm tra cứu ngoài (`google_index`, `page_rank`,
   `domain_age`) — theo dõi độ giòn của mô hình khi tra cứu lỗi.
+
+## Ghi chú Tuần 2 (xem `reports/rf_v1/BAO_CAO_RF_V1.md`)
+
+- RF v1 trên 81 đặc trưng: **k-fold ROC-AUC 0,9935 ± 0,0007**; test (2.286 URL giữ lại)
+  accuracy 0,961 / F1 0,961 / ROC-AUC 0,992 → không overfit rõ rệt.
+- Top 30 đặc trưng gộp **90,6%** importance, top 42 → 96,8%; 45/81 đặc trưng importance < 0,005
+  → Tuần 3 cắt còn ~30–42 đặc trưng.
+- 4 đặc trưng đầu bảng (`google_index`, `page_rank`, `nb_hyperlinks`, `web_traffic`) ≈ 40%
+  importance, phần lớn là nhóm tra cứu ngoài → Tuần 3 train thêm bản "chỉ đặc trưng nhanh".
+- `src/override/brands_vn.json`: **62** thương hiệu VN (30 ngân hàng, 8 ví, 10 TMĐT, 6 viễn
+  thông/công nghệ, 3 hàng không, 5 dịch vụ công) — **bản thảo cần rà lại nguồn chính thức**.

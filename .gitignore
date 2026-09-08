@@ -7,14 +7,15 @@ venv/
 env/
 .ipynb_checkpoints/
 
-# Dữ liệu sinh ra / mô hình đã train (không commit, tái tạo được từ notebook)
+# Dữ liệu sinh ra / mô hình đã train (không commit, tái tạo được từ notebook/script)
 models/*.joblib
 models/*.pkl
-reports/eda/*.png
-reports/eda/*.csv
-reports/eda/*.json
-!reports/eda/.gitkeep
+reports/**/*.png
+reports/**/*.csv
+reports/**/*.json
+!reports/**/.gitkeep
 !models/.gitkeep
+# giữ lại các báo cáo .md chốt trong reports/ (BAO_CAO_*.md)
 
 # Dataset lớn tải thêm (giữ dataset_phishing.csv gốc)
 Dataset/reference/
@@ -23,6 +24,9 @@ Dataset/simulated/
 
 # Script trích đặc trưng gốc tải từ Mendeley (bản quyền tác giả — không redistribute)
 src/features/hannousse_yahiouche/
+
+# Công cụ cộng tác markdown (chứa token phiên cục bộ — không commit)
+.markdown-collab/
 
 # IDE / OS
 .idea/
