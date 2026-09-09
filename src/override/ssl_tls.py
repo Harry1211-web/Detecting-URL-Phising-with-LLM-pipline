@@ -3,21 +3,25 @@
 đáng ngờ"*).
 
 Quy trình:
-  1. Bắt tay TLS CÓ xác thực (``ssl.create_default_context``: kiểm chuỗi tin cậy +
-     khớp hostname + còn hạn) tới ``host:443``.
-  2. Bắt tay OK → đọc ``notBefore`` của chứng chỉ leaf:
+  1. Phân giải hostname và **chặn đích nội bộ** (loopback / private / link-local /
+     reserved / multicast) + chỉ cho cổng HTTPS chuẩn — luật này nhận URL kẻ tấn
+     công kiểm soát, không được biến thành công cụ dò mạng nội bộ (SSRF).
+  2. Bắt tay TLS **CÓ xác thực** (``ssl.create_default_context``: kiểm chuỗi tin
+     cậy + khớp hostname + còn hạn), **ghim vào đúng IP đã kiểm** để tránh
+     DNS-rebinding, vẫn gửi SNI = hostname gốc.
+  3. Bắt tay OK → đọc ``notBefore`` chứng chỉ leaf:
        * cấp < ``NGUONG_CERT_MOI_NGAY`` ngày  → flag = True  (cert quá mới → đáng ngờ)
        * cấp >= ngưỡng                          → flag = False (hợp lệ, đủ "tuổi")
-  3. Bắt tay báo lỗi XÁC THỰC (self-signed, hết hạn, sai hostname, CA lạ)
-     → flag = True (chứng chỉ không hợp lệ). Vẫn cố đọc ``notBefore`` qua kênh
-     KHÔNG xác thực để ghi lý do rõ hơn.
-  4. Không kết nối được / timeout / cổng không nói TLS → flag = "unknown".
-     **KHÔNG mặc định an toàn** (giống Override #1).
+  4. Bắt tay trượt XÁC THỰC (self-signed, hết hạn, sai hostname, CA lạ)
+     → flag = True. Lý do phân loại từ ``verify_code`` của OpenSSL (KHÔNG chép
+     nguyên văn thông điệp lỗi vào ``reason`` — tránh lộ đường dẫn/chi tiết nội bộ).
+  5. Không kết nối được / timeout / cổng không nói TLS / bị chặn ở bước 1
+     → flag = "unknown". **KHÔNG mặc định an toàn** (giống Override #1).
 
 Cờ (flag) trả về — khớp ``contracts.OverrideResult``:
   True      — chứng chỉ không hợp lệ HOẶC hợp lệ nhưng cấp < 2 ngày
   False     — chứng chỉ hợp lệ và cấp >= 2 ngày
-  "unknown" — không đọc được chứng chỉ (mạng lỗi / timeout / không phải HTTPS)
+  "unknown" — không đọc được chứng chỉ (mạng lỗi / timeout / không HTTPS / bị chặn)
 
 ``NGUONG_CERT_MOI_NGAY`` là MẶC ĐỊNH KHỞI ĐỘNG — hiệu chỉnh lại cùng ngưỡng phân
 vùng ở Tuần 6 trên traffic mô phỏng (Plan.md mục 3 Tuần 6).
@@ -28,6 +32,7 @@ Chạy thử (có mạng):  python -m src.override.ssl_tls --smoke https://vietc
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import socket
 import ssl
 import time
@@ -36,24 +41,35 @@ from typing import Literal, TypedDict
 
 from src.contracts import OverrideResult
 
-try:  # đọc notBefore ở nhánh KHÔNG xác thực (chứng chỉ lỗi) — tuỳ chọn
-    from cryptography import x509 as _x509
-except Exception:  # pragma: no cover - môi trường thiếu gói
-    _x509 = None
-
 # Bắt tay TLS = TCP + ClientHello + trao chứng chỉ, hiếm khi xong trong ~500ms
 # như 1 GET RDAP đơn lẻ (Override #1). Cho rộng hơn nhưng vẫn chặn trên.
 SSL_TIMEOUT_S = 2.0
 NGUONG_CERT_MOI_NGAY = 2  # CLAUDE.md: "< 2 ngày" (hiệu chỉnh lại Tuần 6)
 
+# Chỉ đi TLS trên cổng HTTPS chuẩn — không dùng luật này để chạm cổng dịch vụ
+# khác (22/25/3306/6379...) trên đích bất kỳ.
+CONG_HTTPS_CHO_PHEP = frozenset({443, 8443, 4443, 9443})
+
 TrangThaiCert = Literal["hop_le", "khong_hop_le", "khong_doc_duoc"]
+
+# Ánh xạ X509_V_ERR_* (OpenSSL) → câu tiếng Việt CỐ ĐỊNH, an toàn để đưa vào log
+# / prompt Ollama / giải thích cho người dùng.
+_LOI_XAC_THUC: dict[int, str] = {
+    10: "chứng chỉ đã hết hạn",
+    9: "chứng chỉ chưa tới ngày hiệu lực",
+    18: "chứng chỉ tự ký (self-signed)",
+    19: "chuỗi tin cậy tự ký, CA gốc không rõ",
+    20: "không tìm được chứng chỉ CA phát hành",
+    21: "không dựng được chuỗi tin cậy tới CA",
+    62: "tên miền không khớp với chứng chỉ",
+}
 
 
 class CertInfo(TypedDict):
     trang_thai: TrangThaiCert
     not_before: datetime | None  # UTC
     not_after: datetime | None   # UTC
-    chi_tiet: str
+    chi_tiet: str                # LUÔN là chuỗi phân loại cố định, không phải str(e)
 
 
 # ---------------------------------------------------------------------------
@@ -83,6 +99,38 @@ def tach_host_port(url_hoac_host: str) -> tuple[str, int]:
 
 
 # ---------------------------------------------------------------------------
+# Chống SSRF: phân giải + loại đích không định tuyến công cộng
+# ---------------------------------------------------------------------------
+def _ip_cong_cong(ip_txt: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(ip_txt)
+    except ValueError:
+        return False
+    return not (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_reserved or ip.is_multicast or ip.is_unspecified)
+
+
+def _giai_va_kiem_dich(host: str, port: int) -> tuple[bool, str, str]:
+    """→ (an_toàn, ip_để_kết_nối, lý_do_cố_định_nếu_chặn).
+
+    Trả IP đã kiểm để tầng trên kết nối THẲNG vào đó (không phân giải lại tên →
+    khép cửa DNS-rebinding), trong khi vẫn xác thực chứng chỉ theo ``host``.
+    """
+    if port not in CONG_HTTPS_CHO_PHEP:
+        return False, "", f"cổng {port} không phải cổng HTTPS chuẩn"
+    try:
+        infos = socket.getaddrinfo(host, port, proto=socket.IPPROTO_TCP)
+    except (socket.gaierror, UnicodeError, OSError):
+        return False, "", "không phân giải được tên miền"
+    ips = [sa[0] for *_, sa in infos]
+    if not ips:
+        return False, "", "không phân giải được tên miền"
+    if any(not _ip_cong_cong(ip) for ip in ips):
+        return False, "", "đích trỏ tới địa chỉ nội bộ/không định tuyến công cộng"
+    return True, ips[0], ""
+
+
+# ---------------------------------------------------------------------------
 # Đọc chứng chỉ
 # ---------------------------------------------------------------------------
 def _epoch_to_utc(epoch: float | None) -> datetime | None:
@@ -91,37 +139,24 @@ def _epoch_to_utc(epoch: float | None) -> datetime | None:
     return datetime.fromtimestamp(epoch, tz=timezone.utc)
 
 
-def _doc_notbefore_khong_xac_thuc(host: str, port: int) -> tuple[datetime | None, datetime | None]:
-    """Nhánh cứu vãn: chứng chỉ ĐÃ trượt xác thực ở ``_lay_thong_tin_cert`` — ở đây
-    chỉ mở lại kết nối để ĐỌC ``notBefore``/``notAfter`` phục vụ câu lý do, KHÔNG
-    gửi/nhận dữ liệu ứng dụng nào qua socket này. Kết quả vẫn là flag=True (đáng
-    ngờ); tắt xác thực ở đây không nới lỏng phán quyết, chỉ làm rõ nguyên nhân.
-    """
-    if _x509 is None:
-        return None, None
-    ctx = ssl._create_unverified_context()  # noqa: SLF001 - chỉ để đọc ngày, xem docstring
-    try:
-        with socket.create_connection((host, port), timeout=SSL_TIMEOUT_S) as sock:
-            with ctx.wrap_socket(sock, server_hostname=host) as ssock:
-                der = ssock.getpeercert(binary_form=True)
-        if not der:
-            return None, None
-        cert = _x509.load_der_x509_certificate(der)
-        nb = cert.not_valid_before_utc
-        na = cert.not_valid_after_utc
-        return nb, na
-    except Exception:
-        return None, None
+def _phan_loai_loi_xac_thuc(e: ssl.SSLCertVerificationError) -> str:
+    ma = getattr(e, "verify_code", None)
+    return _LOI_XAC_THUC.get(ma, "chứng chỉ không qua kiểm định tin cậy")
 
 
 def _lay_thong_tin_cert(host: str, port: int = 443) -> CertInfo:
-    """Bắt tay TLS có xác thực; phân loại hop_le / khong_hop_le / khong_doc_duoc.
+    """Kiểm đích (SSRF) → bắt tay TLS có xác thực → phân loại trạng thái chứng chỉ.
 
     Đây là hàm được monkeypatch trong test — giữ chữ ký ổn định.
     """
+    an_toan, ip, ly_do = _giai_va_kiem_dich(host, port)
+    if not an_toan:
+        return CertInfo(trang_thai="khong_doc_duoc", not_before=None,
+                        not_after=None, chi_tiet=ly_do)
+
     ctx = ssl.create_default_context()
     try:
-        with socket.create_connection((host, port), timeout=SSL_TIMEOUT_S) as sock:
+        with socket.create_connection((ip, port), timeout=SSL_TIMEOUT_S) as sock:
             with ctx.wrap_socket(sock, server_hostname=host) as ssock:
                 cert = ssock.getpeercert() or {}
         nb = _epoch_to_utc(ssl.cert_time_to_seconds(cert["notBefore"])) if cert.get("notBefore") else None
@@ -129,13 +164,11 @@ def _lay_thong_tin_cert(host: str, port: int = 443) -> CertInfo:
         return CertInfo(trang_thai="hop_le", not_before=nb, not_after=na,
                         chi_tiet="bắt tay TLS có xác thực thành công")
     except ssl.SSLCertVerificationError as e:
-        nb, na = _doc_notbefore_khong_xac_thuc(host, port)
-        ly_do = (getattr(e, "verify_message", None) or str(e)).strip()
-        return CertInfo(trang_thai="khong_hop_le", not_before=nb, not_after=na,
-                        chi_tiet=f"lỗi xác thực chứng chỉ: {ly_do}")
-    except (ssl.SSLError, socket.timeout, OSError) as e:
+        return CertInfo(trang_thai="khong_hop_le", not_before=None, not_after=None,
+                        chi_tiet=_phan_loai_loi_xac_thuc(e))
+    except (ssl.SSLError, socket.timeout, OSError):
         return CertInfo(trang_thai="khong_doc_duoc", not_before=None, not_after=None,
-                        chi_tiet=f"không đọc được chứng chỉ ({type(e).__name__}: {e})")
+                        chi_tiet="không thiết lập được kết nối TLS")
 
 
 # ---------------------------------------------------------------------------
@@ -163,17 +196,16 @@ def kiem_tra_ssl_tls(url: str,
             reason=f"{host}: {info['chi_tiet']} (không mặc định an toàn).",
         )
 
-    nb = info["not_before"]
-    tuoi_ngay = (datetime.now(timezone.utc) - nb).days if nb else None
-
     if info["trang_thai"] == "khong_hop_le":
-        them = f", chứng chỉ cấp {nb.date().isoformat()}" if nb else ""
         return OverrideResult(
             name="ssl_tls", flag=True, latency_ms=latency_ms,
-            reason=f"{host}: {info['chi_tiet']}{them} → đáng ngờ.",
+            reason=f"{host}: {info['chi_tiet']} → đáng ngờ.",
         )
 
     # trang_thai == "hop_le"
+    nb = info["not_before"]
+    tuoi_ngay = (datetime.now(timezone.utc) - nb).days if nb else None
+
     if tuoi_ngay is not None and tuoi_ngay < nguong_ngay:
         return OverrideResult(
             name="ssl_tls", flag=True, latency_ms=latency_ms,

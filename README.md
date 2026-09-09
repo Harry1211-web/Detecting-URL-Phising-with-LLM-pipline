@@ -62,7 +62,7 @@ python -m pytest -q                                # 43 test (contracts + brands
 | **1** | scaffold FastAPI, cài Ollama, scaffold Extension MV3 | ✅ EDA dataset · scaffold repo/contract · trial trích đặc trưng |
 | **2** | orchestrator + wiring 87 đặc trưng + cache 24h | ✅ train RF v1 (GridSearchCV k-fold, ROC-AUC 0,993) · ✅ list brand VN (62 domain) |
 | **3** | client Ollama + hạ tầng RAG | ✅ feature selection 81→30 · ✅ RF cuối + bản nhanh + XGBoost · ✅ Override #1 (tuổi domain) |
-| **4** | job blocklist DNR | ✅ Override #2 (SSL/TLS) + #3 (typosquatting) · gói `override` + phân vùng · 24 test offline |
+| **4** | job blocklist DNR | ✅ Override #2 (SSL/TLS, chống SSRF) + #3 (typosquatting) · gói `override` + phân vùng · 29 test offline |
 | 5 | tích hợp #1 · Extension Lớp B | nạp kho RAG Tầng 2 · ghép RAG vào prompt |
 | 6 | hoàn thiện Extension · parity Chrome/Edge | hiệu chỉnh ngưỡng · benchmark Ollama |
 | 7 | gia cố backend · health-check Ollama | red-team prompt injection · concept drift PhiUSIIL |
@@ -116,10 +116,15 @@ Chi tiết: `Plan.md` mục 3.
   - `flag=True`: chứng chỉ **không hợp lệ** (self-signed / hết hạn / sai hostname / CA lạ)
     **hoặc** hợp lệ nhưng **cấp < 2 ngày** (`NGUONG_CERT_MOI_NGAY`, CLAUDE.md).
   - `flag=False`: hợp lệ và cấp ≥ 2 ngày. `flag="unknown"`: không kết nối / timeout / cổng
-    không nói TLS — **không mặc định an toàn**.
-  - Nhánh chứng chỉ lỗi vẫn mở lại kết nối **không xác thực** *chỉ để đọc* `notBefore`
-    ghi vào lý do — không trao đổi dữ liệu, không đổi phán quyết (vẫn `True`).
-  - Smoke thật đã kiểm: `vietcombank.com.vn`→False, `self-signed.badssl.com`/`expired.badssl.com`→True.
+    không nói TLS / bị chặn — **không mặc định an toàn**.
+  - **Chống SSRF** (luật nhận URL kẻ tấn công kiểm soát): chỉ cổng HTTPS chuẩn
+    (443/8443/4443/9443); phân giải hostname và **từ chối IP nội bộ** (loopback/private/
+    link-local/reserved/multicast); kết nối **ghim vào đúng IP đã kiểm** (đóng cửa
+    DNS-rebinding), SNI vẫn theo hostname gốc.
+  - **Không rò thông tin**: `reason` KHÔNG chép nguyên văn `str(exception)`; lỗi xác thực
+    ánh xạ từ `verify_code` OpenSSL sang câu tiếng Việt cố định.
+  - Smoke thật đã kiểm: `vietcombank.com.vn`→False; `self-signed`/`expired`/`wrong.host.badssl.com`→True;
+    `127.0.0.1`, `google.com:22`→"unknown" (bị chặn).
 - **Override #3 — Typosquatting** (`src/override/typosquatting.py`): Levenshtein nhãn domain
   vs 62 brand VN, ngưỡng `max(1, len(brand)//5)`. Thuần tính toán → **không bao giờ `"unknown"`**.
   - 4 kiểu cờ (nghiêm trọng giảm dần): trùng khít tên brand khác TLD chính thức ·
@@ -133,7 +138,8 @@ Chi tiết: `Plan.md` mục 3.
   thứ tự `[domain_age, ssl_tls, typosquatting]`; `phan_vung_tu_url(url, rf_score)` ghép luôn
   `contracts.phan_vung` (tiện test/tích hợp — orchestrator sản xuất là việc Bạn A, chạy 3 luật
   **song song** với RF).
-- **Test**: +24 offline (`test_ssl_tls.py` 10 · `test_typosquatting.py` 10 · `test_override_pipeline.py` 6),
-  monkeypatch mọi bước chạm mạng. Tổng repo **43 test**, `pytest -q` xanh.
+- **Test**: +29 offline (`test_ssl_tls.py` 15 gồm chống SSRF/rò lộ · `test_typosquatting.py` 10 ·
+  `test_override_pipeline.py` 6), monkeypatch mọi bước chạm mạng ngoài. Tổng repo **48 test**,
+  `pytest -q` xanh.
 - Ngưỡng `NGUONG_CERT_MOI_NGAY=2`, `RF_LOW_RISK_THRESHOLD_DEFAULT=0.30` là **mặc định khởi
   động** — hiệu chỉnh lại Tuần 6 trên traffic mô phỏng 95% Tranco / 5% phishing.
