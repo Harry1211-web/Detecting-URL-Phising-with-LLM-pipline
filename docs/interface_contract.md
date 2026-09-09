@@ -77,6 +77,8 @@ mới coi là "không vi phạm" khi phân vùng. Áp dụng cho:
   không hợp lệ → `flag = true`.
 - `typosquatting`: Levenshtein vs danh sách brand VN, ngưỡng `max(1, len(brand)//5)`.
   Không match brand nào ở khoảng cách xét → `flag = false` (đã kiểm tra, không phải unknown).
+  Thuần tính toán → **không bao giờ trả `"unknown"`**. Brand tên < 5 ký tự bị loại khỏi
+  so khớp Levenshtein (giảm bắt nhầm — xem `src/override/typosquatting.py`).
 
 ---
 
