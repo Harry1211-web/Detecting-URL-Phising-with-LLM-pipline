@@ -49,9 +49,13 @@ Pipeline khi người dùng click 1 URL:
        **không mặc định là an toàn**. `.vn` hiện chưa hỗ trợ RDAP (VNNIC chưa triển khai) → domain
        Việt Nam luôn rơi xuống fallback WHOIS trên thực tế.
      - SSL/TLS: chứng chỉ hợp lệ / cấp quá gần đây (< 2 ngày) là cờ đáng ngờ.
-     - Typosquatting: **Levenshtein Distance** so với danh sách domain thương hiệu VN (chưa có file —
-       cần tự xây khi viết code, xem mục Việc cần làm), ngưỡng tỉ lệ theo độ dài tên
-       (`max(1, len(brand)//5)`) để giảm bắt nhầm brand tên ngắn.
+     - Typosquatting: **Levenshtein Distance** so với danh sách thương hiệu VN
+       (`Dataset/brands/vn_brand_domains.csv`, 63 brand, cột `verified` rà tay theo SBV). Ngưỡng
+       **theo độ dài nhãn kiểu PhishMatch** (arXiv:2112.02226): nhãn ≤ 10 ký tự → khoảng cách 1,
+       nhãn > 10 → khoảng cách 2. **KHÔNG loại nhãn ngắn** — tài liệu đo typosquatting dùng
+       ngưỡng-theo-độ-dài chứ không cắt nhãn ngắn; tỉ lệ báo nhầm đo riêng khi hiệu chỉnh (Tuần 6).
+       *(Bản Tuần 4 đầu dùng `max(1, len(brand)//5)` + loại nhãn < 5 ký tự — đã đảo lại 2026-09-10,
+       xem `README.md` mục "Ghi chú rà brand VN".)*
    - **Phân vùng (2 vùng)**: RF điểm thấp **và** 0 cờ vi phạm override → **Vùng thấp**, cho qua ngay,
      không gọi LLM. Mọi trường hợp còn lại → **Vùng nghi ngờ**, gọi Ollama.
      - *Lý do chỉ 2 vùng, không phải 3*: thiết kế đầu tách vùng xám (LLM nhẹ, rẻ) và vùng đen (LLM
@@ -82,8 +86,8 @@ Theo đúng thứ tự nên làm, dựa trên tài liệu thiết kế:
    trưng) trước khi train.
 2. Train Random Forest: GridSearchCV + k-fold (k=5) trên 87 đặc trưng → lấy `feature_importances_` →
    chọn lại ~30-42 đặc trưng mạnh nhất → train lại bản cuối trên tập đã rút gọn.
-3. Viết 3 hàm Override: tuổi domain (RDAP→WHOIS), SSL/TLS, Levenshtein typosquatting — cần tự xây file
-   danh sách thương hiệu VN (chưa tồn tại trong repo này).
+3. ~~Viết 3 hàm Override: tuổi domain (RDAP→WHOIS), SSL/TLS, Levenshtein typosquatting.~~ **Xong**
+   (`src/override/`, Tuần 3–4). Danh sách brand VN: `Dataset/brands/vn_brand_domains.csv` (63 brand).
 4. Cài Ollama (`ollama pull qwen3.5:2b` + `ollama pull nomic-embed-text`), dựng RAG 2 tầng, viết logic
    gọi Ollama cho Vùng nghi ngờ.
 5. Ghép toàn bộ thành 1 backend API (`/check-url`), sau đó mới đến Browser Extension (Lớp A/B).

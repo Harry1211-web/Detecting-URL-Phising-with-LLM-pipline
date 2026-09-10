@@ -1,4 +1,4 @@
-# Danh sách thương hiệu — `dataset/brands/`
+# Danh sách thương hiệu — `Dataset/brands/`
 
 ## `vn_brand_domains.csv` — thương hiệu Việt Nam hay bị giả mạo phishing
 
@@ -56,9 +56,3 @@ Danh sách brand quốc tế (category / description / identifier / name / websi
 dùng cho **feature extractor gốc** Hannousse & Yahiouche (`domain_in_brand`, `brand_in_subdomain`,
 `brand_in_path`) thay cho `allbrands.txt` rút gọn. Không dùng cho Override #3 (Override #3 chỉ so
 brand Việt Nam).
-
-## `03_override_rules_test.ipynb`
-
-Notebook thử nghiệm cũ — dùng mô hình **3 vùng** (Vùng thấp / xám / đen) và luật "đếm cờ vi phạm".
-Thiết kế hiện tại đã gộp còn **2 vùng** (`vung_thap` / `vung_nghi_ngo`, xem `CLAUDE.md` + `Plan.md`).
-Giữ làm tham chiếu lịch sử; **không phản ánh code hiện tại** trong `src/override/`.
