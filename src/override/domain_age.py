@@ -17,7 +17,19 @@ Cờ (flag) trả về:
   "unknown"— không xác định được ngày đăng ký từ cả RDAP lẫn WHOIS
 
 Ngưỡng NGUONG_TUOI_MOI_NGAY là MẶC ĐỊNH KHỞI ĐỘNG — hiệu chỉnh lại cùng ngưỡng
-phân vùng ở Tuần 6 trên traffic mô phỏng (Plan.md mục 3 Tuần 6).
+phân vùng ở Tuần 6 trên traffic mô phỏng (Plan.md mục 3 Tuần 6). Không có con số
+"chuẩn" thống nhất trong tài liệu: 30 ngày (heuristic phổ biến), 45 ngày (bằng
+sáng chế Google US11777987 lấy làm ví dụ ngưỡng "an toàn"), 90 ngày (đang dùng).
+
+**Giới hạn cấu trúc của luật này** (ghi vào Section "Limitations" của bài):
+  - Chỉ hiệu quả với phishing dùng **domain đăng ký mới** — CAIDA/WEIS 2025 ước
+    tính chỉ ~66% domain phishing là đăng ký mới cho mục đích xấu; ~34% còn lại là
+    **domain hợp pháp bị chiếm** (đã tồn tại lâu năm) → luật này luôn báo "an
+    toàn" cho nhóm đó, mù hoàn toàn, không phải chuyện chỉnh ngưỡng.
+  - Ngay trong nhóm domain mới, xu hướng **"ủ domain"** (đăng ký sớm, để nội dung
+    vô hại nhiều tháng rồi mới dùng) đang làm giảm hiệu quả — Allure Security
+    4/2026: chỉ 7% domain phishing hiện dưới 30 ngày tuổi.
+  ⇒ Phải dựa thêm Random Forest + Typosquatting để bù, không chỉ 1 luật domain_age.
 
 Timeout ~500ms mỗi bước (Plan.md). WHOIS cổng 43 thường chậm hơn mốc này → hay
 rơi về "unknown"; đó là hành vi đã lường trước, không phải bug.

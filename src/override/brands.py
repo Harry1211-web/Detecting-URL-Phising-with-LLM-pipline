@@ -1,63 +1,79 @@
-"""Nạp danh sách thương hiệu VN (src/override/brands_vn.json).
+"""Nạp danh sách thương hiệu VN từ ``dataset/brands/vn_brand_domains.csv``.
 
 Dùng bởi:
-  - Override #3 (typosquatting Levenshtein) — Tuần 4.
+  - Override #3 (typosquatting Levenshtein) — ``src/override/typosquatting.py``.
   - RAG Tầng 1 (structured lookup) — Tuần 5, phía Bạn A.
 
-Tuần 2 mới chỉ dựng file + loader + hàm ngưỡng. Logic so khớp Levenshtein viết ở
-module override #3 sau.
+File CSV phẳng (1 dòng / domain), cột: ``brand, domain, category, verified, ghi_chu``
+— xem ``Dataset/brands/README.md``. Thay cho ``brands_vn.json`` (đã bỏ) vì cần cột
+``verified`` để theo dõi tiến độ rà tay từng dòng với nguồn SBV.
 """
 
 from __future__ import annotations
 
-import json
+import csv
 from functools import lru_cache
 from pathlib import Path
 from typing import TypedDict
 
-BRANDS_PATH = Path(__file__).with_name("brands_vn.json")
+# Repo dùng 'Dataset/' viết hoa (xem Dataset/train/, tests/test_contracts.py).
+BRANDS_PATH = Path(__file__).resolve().parents[2] / "Dataset" / "brands" / "vn_brand_domains.csv"
 
 NHOM_HOP_LE = {
-    "ngan_hang", "vi_dien_tu", "tmdt", "vien_thong_cong_nghe",
+    "ngan_hang", "vi_dien_tu", "thuong_mai_dien_tu", "vien_thong",
     "hang_khong", "dich_vu_cong",
 }
+VERIFIED_HOP_LE = {"da_xac_minh", "chua_xac_minh"}
 
 
 class Brand(TypedDict):
-    ten: str
-    nhan: str
-    nhom: str
-    domains: list[str]
+    nhan: str            # = cột 'brand' — nhãn so Levenshtein, duy nhất
+    nhom: str            # = cột 'category'
+    domains: list[str]   # mọi domain chính thức của brand này (phần tử [0] = dòng đầu trong CSV)
+    verified: str        # 'da_xac_minh' nếu MỌI dòng của brand đã xác minh, ngược lại 'chua_xac_minh'
+    ghi_chu: str         # ghi chú gộp (đổi tên / cảnh báo), rỗng nếu không có
 
 
 @lru_cache(maxsize=1)
 def load_brands(path: str | None = None) -> tuple[Brand, ...]:
-    """Đọc + kiểm tính toàn vẹn file brand. Cache lại (file tĩnh)."""
+    """Đọc CSV, gộp theo ``brand``, kiểm tính toàn vẹn. Cache lại (file tĩnh)."""
     p = Path(path) if path else BRANDS_PATH
-    data = json.loads(p.read_text(encoding="utf-8"))
-    brands: list[Brand] = data["brands"]
+    rows: list[dict[str, str]] = []
+    with p.open(encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        assert reader.fieldnames == ["brand", "domain", "category", "verified", "ghi_chu"], \
+            f"header CSV sai: {reader.fieldnames}"
+        for r in reader:
+            rows.append({k: (v or "").strip() for k, v in r.items()})
 
-    nhan_seen: set[str] = set()
-    domain_seen: set[str] = set()
-    for b in brands:
-        assert set(b) >= {"ten", "nhan", "nhom", "domains"}, f"thiếu khoá: {b}"
-        assert b["nhom"] in NHOM_HOP_LE, f"nhóm lạ: {b['nhom']} ({b['ten']})"
-        assert b["nhan"] == b["nhan"].lower(), f"nhãn phải viết thường: {b['nhan']}"
-        assert b["nhan"].isalnum(), f"nhãn chỉ gồm chữ/số: {b['nhan']}"
-        assert b["nhan"] not in nhan_seen, f"nhãn trùng: {b['nhan']}"
-        nhan_seen.add(b["nhan"])
-        assert b["domains"], f"{b['ten']} không có domain"
-        for d in b["domains"]:
-            d = d.lower()
-            assert "/" not in d and " " not in d, f"domain sai định dạng: {d}"
-            assert "." in d, f"domain thiếu TLD: {d}"
-            assert d not in domain_seen, f"domain trùng giữa 2 brand: {d}"
-            domain_seen.add(d)
+    gop: dict[str, Brand] = {}
+    domain_seen: dict[str, str] = {}
+    for r in rows:
+        nhan, domain = r["brand"].lower(), r["domain"].lower()
+        assert nhan.isalnum(), f"nhãn chỉ gồm chữ/số: {nhan!r}"
+        assert r["category"] in NHOM_HOP_LE, f"nhóm lạ: {r['category']!r} ({nhan})"
+        assert r["verified"] in VERIFIED_HOP_LE, f"verified lạ: {r['verified']!r} ({nhan})"
+        assert "." in domain and "/" not in domain and " " not in domain, \
+            f"domain sai định dạng: {domain!r}"
+        assert domain not in domain_seen or domain_seen[domain] == nhan, \
+            f"domain '{domain}' gán cho 2 brand: {domain_seen.get(domain)} + {nhan}"
+        domain_seen[domain] = nhan
 
-    meta_n = data.get("_meta", {}).get("so_luong")
-    if meta_n is not None:
-        assert meta_n == len(brands), f"_meta.so_luong={meta_n} ≠ {len(brands)}"
-    return tuple(brands)
+        b = gop.get(nhan)
+        if b is None:
+            gop[nhan] = Brand(nhan=nhan, nhom=r["category"], domains=[domain],
+                              verified=r["verified"],
+                              ghi_chu=r["ghi_chu"])
+        else:
+            assert b["nhom"] == r["category"], f"{nhan}: nhóm không nhất quán giữa các dòng"
+            b["domains"].append(domain)
+            # brand chỉ 'da_xac_minh' khi MỌI dòng của nó đã xác minh
+            if r["verified"] != "da_xac_minh":
+                b["verified"] = "chua_xac_minh"
+            if r["ghi_chu"] and r["ghi_chu"] not in b["ghi_chu"]:
+                b["ghi_chu"] = f"{b['ghi_chu']}; {r['ghi_chu']}".strip("; ")
+
+    return tuple(gop.values())
 
 
 def brand_by_label() -> dict[str, Brand]:
@@ -68,17 +84,32 @@ def all_official_domains() -> set[str]:
     return {d.lower() for b in load_brands() for d in b["domains"]}
 
 
-def typosquat_threshold(brand_label: str) -> int:
-    """Ngưỡng khoảng cách Levenshtein cho 1 nhãn brand (CLAUDE.md, mục Kiến trúc).
+def verified_official_domains() -> set[str]:
+    """Chỉ domain của brand đã ``da_xac_minh`` — dùng khi cần độ chắc cao (RAG Tầng 1)."""
+    return {d.lower() for b in load_brands() if b["verified"] == "da_xac_minh" for d in b["domains"]}
 
-    max(1, len(brand)//5) — brand tên ngắn ngưỡng 1 để giảm bắt nhầm.
+
+def typosquat_threshold(brand_label: str) -> int:
+    """Ngưỡng khoảng cách Levenshtein cho 1 nhãn brand.
+
+    Quy tắc theo độ dài của PhishMatch (arXiv:2112.02226, "A Layered Approach for
+    Effective Detection of Phishing URLs"): nhãn **ngắn (<= 10 ký tự) → ngưỡng 1**,
+    nhãn **dài (> 10) → ngưỡng 2**. Không loại
+    bỏ nhãn ngắn — tài liệu đo typosquatting dùng ngưỡng-theo-độ-dài chứ không cắt
+    nhãn ngắn; việc cắt sẽ bỏ sót typo của brand tên ngắn (acb/scb/vib/momo/zalo…).
+    Tỉ lệ báo nhầm của luật này được đo riêng ở Section VI-A của bài.
+
+    Xấp xỉ công thức ``max(1, len//5)`` ban đầu nhưng chặn trần ở 2 (PhishMatch
+    không dùng ngưỡng >= 3 vì quá lỏng).
     """
-    return max(1, len(brand_label) // 5)
+    return 1 if len(brand_label) <= 10 else 2
 
 
 if __name__ == "__main__":
     bs = load_brands()
     from collections import Counter
-    print(f"{len(bs)} thương hiệu, {len(all_official_domains())} domain chính thức")
+    nv = sum(1 for b in bs if b["verified"] == "da_xac_minh")
+    print(f"{len(bs)} thương hiệu, {len(all_official_domains())} domain chính thức, "
+          f"{nv} brand đã xác minh")
     for nhom, n in sorted(Counter(b["nhom"] for b in bs).items()):
-        print(f"  {nhom:22s} {n}")
+        print(f"  {nhom:20s} {n}")

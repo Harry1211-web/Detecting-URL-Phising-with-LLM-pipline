@@ -1,29 +1,32 @@
 """Override #3 — Typosquatting (Plan.md mục 2 & 3 Tuần 4; CLAUDE.md mục Kiến trúc,
-điểm 2: *"Levenshtein Distance so với danh sách domain thương hiệu VN, ngưỡng tỉ
-lệ theo độ dài tên ``max(1, len(brand)//5)`` để giảm bắt nhầm brand tên ngắn"*).
+điểm 2: *"Levenshtein Distance so với danh sách domain thương hiệu VN"*).
 
 So **nhãn domain** của URL đang xét với từng ``nhan`` trong
-``src/override/brands_vn.json`` (loader ở ``brands.py``). Không chạm mạng — thuần
-tính toán, nên **không bao giờ trả "unknown"** (khớp docs/interface_contract.md §2).
+``dataset/brands/vn_brand_domains.csv`` (loader ở ``brands.py``). Không chạm mạng —
+thuần tính toán, nên **không bao giờ trả "unknown"** (khớp docs/interface_contract.md §2).
+
+Ngưỡng Levenshtein: quy tắc **theo độ dài** của PhishMatch (arXiv:2112.02226) —
+``brands.typosquat_threshold``: nhãn <=10 ký tự → 1, nhãn >10 → 2. **KHÔNG loại bỏ
+nhãn ngắn.** (Bản Tuần 4 từng cắt nhãn < 5 ký tự; tài liệu đo typosquatting —
+PhishMatch, và ghi nhận vấn đề của Szurdi 2014 / Agten 2015 — dùng ngưỡng-theo-độ-dài
+chứ không cắt nhãn ngắn. Cắt nhãn ngắn bỏ sót typo của acb/scb/vib/momo/zalo…; tỉ lệ
+báo nhầm được đo riêng ở Section VI-A của bài thay vì chặn trước.)
 
 Cờ (flag) trả về — khớp ``contracts.OverrideResult`` (name='typosquatting'):
   True   — nhãn domain khớp/gần khớp 1 thương hiệu VN nhưng KHÔNG phải domain
-           chính thức của thương hiệu đó. 4 kiểu, xếp theo độ nghiêm trọng:
-             1. mao_danh_truc_tiep  — trùng khít tên brand (dài >= 5 ký tự)
-             2. mao_danh_subdomain  — tên brand nằm nguyên trong subdomain
+           chính thức. 4 kiểu, xếp theo độ nghiêm trọng:
+             1. mao_danh_truc_tiep  — nhãn trùng khít tên brand (mọi độ dài)
+             2. mao_danh_subdomain  — tên brand (>= 4 ký tự) là 1 nhãn subdomain
              3. typosquat           — Levenshtein 1..ngưỡng so với tên brand
              4. brand_nhung         — tên brand (>= 6 ký tự) là chuỗi con của nhãn
   False  — là domain chính thức, hoặc không thương hiệu nào đủ gần trong ngưỡng.
 
-Phạm vi & giới hạn có chủ đích:
-  - Chỉ bắt biến thể *chính tả* của tên. Kiểu "brand + từ khoá" tách bằng dấu
-    (``techcombank-xac-thuc.com``) mà Levenshtein không với tới thì để đặc trưng
-    RF ``brand_in_path`` / ``domain_in_brand`` lo — xem GhiChú mục Kiến trúc.
-  - **Brand tên < 5 ký tự** (mã ngân hàng 3 chữ: acb/scb/vib…, ví ngắn:
-    momo/zalo/tiki…) bị **loại khỏi so khớp Levenshtein**: chuỗi 3-4 ký tự sai
-    lệch 1 phép sửa trùng với vô số domain vô hại → theo đúng yêu cầu "không bắt
-    nhầm brand tên ngắn" (Plan.md mục 7). Sự hiện diện của các tên này vẫn được
-    RF ``domain_in_brand`` / ``brand_in_subdomain`` xử lý.
+Giới hạn có chủ đích (ghi trong Section "Limitations" của bài):
+  - Chỉ bắt biến thể *chính tả gần* của tên. Domain đặt tên **xa hẳn** brand
+    (``secure-amazon-login.com`` cách ``amazon`` 20+ phép sửa — Spoofguard.io 3/2026)
+    thì Levenshtein bó tay; đặc trưng RF nội dung + ``brand_in_path`` lo phần đó.
+  - Khi nhãn candidate TRÙNG KHÍT 1 brand, các match "typo" tới brand khác gần đó
+    bị bỏ qua (nó chính là brand kia, không phải typo).
 
 Chạy thử:  python -m src.override.typosquatting --smoke http://vietccombank.com
 """
@@ -36,7 +39,7 @@ import re
 import time
 
 from src.contracts import OverrideResult
-from src.override.brands import all_official_domains, load_brands, typosquat_threshold
+from src.override.brands import all_official_domains, brand_by_label, load_brands, typosquat_threshold
 from src.override.domain_age import chuan_hoa_domain
 
 try:  # python-Levenshtein (requirements) — fallback thuần Python nếu thiếu
@@ -58,13 +61,10 @@ except Exception:  # pragma: no cover - môi trường thiếu gói
             truoc = hien
         return truoc[-1]
 
-# Nhãn brand ngắn hơn mức này bị LOẠI hoàn toàn khỏi so khớp Levenshtein
-# (cả "trùng khít" lẫn "typo 1..ngưỡng"): chuỗi 3-4 ký tự sai 1 phép sửa trùng
-# với quá nhiều domain vô hại → "không bắt nhầm brand tên ngắn" (Plan.md mục 7).
-NGUONG_NHAN_NGAN = 5
-# Nhãn brand phải dài tối thiểu mức này mới xét "chuỗi con" (tránh 'momo', 'fpt'…
-# khớp bừa vào tên dài).
+# Nhãn brand phải dài tối thiểu mức này mới xét "chuỗi con" (tránh 'momo','fpt'… khớp
+# bừa vào tên dài) và "khớp trong subdomain" (nhãn subdomain hay là từ tuỳ ý).
 NGUONG_BRAND_NHUNG_DAI = 6
+NGUONG_SUBDOMAIN_DAI = 4
 
 _KIEU_UU_TIEN = {
     "mao_danh_truc_tiep": 0,
@@ -125,41 +125,39 @@ def kiem_tra_typosquatting(url: str) -> OverrideResult:
         return _ket_qua(False, "Không tách được nhãn domain — bỏ qua typosquatting.")
 
     if domain in all_official_domains():
-        ten = next((b["ten"] for b in load_brands() if domain in b["domains"]), domain)
-        return _ket_qua(False, f"{domain} là domain chính thức của {ten}.")
+        nhan_thuoc = next((b["nhan"] for b in load_brands() if domain in b["domains"]), domain)
+        return _ket_qua(False, f"{domain} là domain chính thức của '{nhan_thuoc}'.")
 
-    # (kiểu, khoảng_cách, tên_brand, nhãn_brand) — chọn bản nghiêm trọng nhất
-    ung_vien: list[tuple[str, int, str, str]] = []
+    nhan_hop_le = set(brand_by_label())
+    cand_la_brand = cand in nhan_hop_le  # candidate CHÍNH LÀ 1 tên brand (chỉ khác domain)
+
+    # (kiểu, khoảng_cách, nhãn_brand) — chọn bản nghiêm trọng nhất
+    ung_vien: list[tuple[str, int, str]] = []
     for b in load_brands():
         nhan = b["nhan"]
-        thr = typosquat_threshold(nhan)
         d = _lev(cand, nhan)
-        ngan = len(nhan) < NGUONG_NHAN_NGAN
 
-        if not ngan:
-            if d == 0:
-                ung_vien.append(("mao_danh_truc_tiep", 0, b["ten"], nhan))
-            elif 1 <= d <= thr:
-                ung_vien.append(("typosquat", d, b["ten"], nhan))
+        if d == 0:
+            ung_vien.append(("mao_danh_truc_tiep", 0, nhan))
+        elif 1 <= d <= typosquat_threshold(nhan) and not cand_la_brand:
+            ung_vien.append(("typosquat", d, nhan))
 
-        if (len(nhan) >= NGUONG_BRAND_NHUNG_DAI and nhan in cand and cand != nhan):
-            ung_vien.append(("brand_nhung", 0, b["ten"], nhan))
+        if len(nhan) >= NGUONG_BRAND_NHUNG_DAI and nhan in cand and cand != nhan:
+            ung_vien.append(("brand_nhung", 0, nhan))
 
-        if not ngan and nhan in subs:
-            ung_vien.append(("mao_danh_subdomain", 0, b["ten"], nhan))
+        if len(nhan) >= NGUONG_SUBDOMAIN_DAI and nhan in subs:
+            ung_vien.append(("mao_danh_subdomain", 0, nhan))
 
     if not ung_vien:
         return _ket_qua(False, f"Nhãn '{cand}' không khớp thương hiệu VN nào trong ngưỡng Levenshtein.")
 
-    kieu, d, ten, nhan = min(ung_vien, key=lambda x: (_KIEU_UU_TIEN[x[0]], x[1]))
-    if kieu == "mao_danh_subdomain":
-        vi_tri = f"Subdomain của '{domain}'"
-    else:
-        vi_tri = f"Nhãn '{cand}'"
-    chi_tiet = f" (Levenshtein = {d} so với '{nhan}')" if kieu == "typosquat" else ""
+    kieu, d, nhan = min(ung_vien, key=lambda x: (_KIEU_UU_TIEN[x[0]], x[1]))
+    vi_tri = f"Subdomain của '{domain}'" if kieu == "mao_danh_subdomain" else f"Nhãn '{cand}'"
+    chi_tiet = f" (Levenshtein = {d} so với '{nhan}', ngưỡng {typosquat_threshold(nhan)})" \
+        if kieu == "typosquat" else ""
     return _ket_qua(
         True,
-        f"{vi_tri} — {_KIEU_MO_TA[kieu]}: nghi mạo danh {ten}{chi_tiet}; "
+        f"{vi_tri} — {_KIEU_MO_TA[kieu]}: nghi mạo danh '{nhan}'{chi_tiet}; "
         f"domain '{domain}' không nằm trong danh sách chính thức.",
     )
 

@@ -1,0 +1,68 @@
+brand,domain,category,verified,ghi_chu
+vietcombank,vietcombank.com.vn,ngan_hang,chua_xac_minh,
+vietinbank,vietinbank.vn,ngan_hang,da_xac_minh,
+bidv,bidv.com.vn,ngan_hang,chua_xac_minh,
+agribank,agribank.com.vn,ngan_hang,chua_xac_minh,
+techcombank,techcombank.com.vn,ngan_hang,chua_xac_minh,
+mbbank,mbbank.com.vn,ngan_hang,chua_xac_minh,
+vpbank,vpbank.com.vn,ngan_hang,chua_xac_minh,
+acb,acb.com.vn,ngan_hang,chua_xac_minh,
+sacombank,sacombank.com.vn,ngan_hang,da_xac_minh,Tên ĐKKD đổi thành 'NH TMCP Sài Gòn Tài Lộc' từ 01/6/2026 (QĐ 36/QĐ-QLGS4 của NHNN); viết tắt SACOMBANK và domain giữ nguyên
+tpbank,tpb.vn,ngan_hang,chua_xac_minh,Domain chính là tpb.vn
+tpbank,tpbank.com.vn,ngan_hang,chua_xac_minh,
+hdbank,hdbank.com.vn,ngan_hang,chua_xac_minh,
+vib,vib.com.vn,ngan_hang,chua_xac_minh,
+shb,shb.com.vn,ngan_hang,chua_xac_minh,
+eximbank,eximbank.com.vn,ngan_hang,chua_xac_minh,
+msb,msb.com.vn,ngan_hang,chua_xac_minh,
+ocb,ocb.com.vn,ngan_hang,chua_xac_minh,
+seabank,seabank.com.vn,ngan_hang,chua_xac_minh,
+lpbank,lpbank.com.vn,ngan_hang,da_xac_minh,Tên cũ LienVietPostBank; NHNN chấp thuận đổi viết tắt thành LPBank từ 2023
+namabank,namabank.com.vn,ngan_hang,chua_xac_minh,
+abbank,abbank.vn,ngan_hang,chua_xac_minh,
+pvcombank,pvcombank.com.vn,ngan_hang,chua_xac_minh,
+scb,scb.com.vn,ngan_hang,chua_xac_minh,SCB (Sài Gòn) đang kiểm soát đặc biệt — kiểm tra lại tình trạng khi rà
+bacabank,baca-bank.vn,ngan_hang,chua_xac_minh,Domain có dấu gạch ngang
+vietbank,vietbank.com.vn,ngan_hang,da_xac_minh,
+vietabank,vietabank.com.vn,ngan_hang,chua_xac_minh,
+saigonbank,saigonbank.com.vn,ngan_hang,chua_xac_minh,
+baovietbank,baovietbank.vn,ngan_hang,chua_xac_minh,
+ncb,ncb-bank.vn,ngan_hang,chua_xac_minh,Domain có dấu gạch ngang
+cake,cake.vn,ngan_hang,chua_xac_minh,Ngân hàng số của VPBank
+timo,timo.vn,ngan_hang,chua_xac_minh,Ngân hàng số (hợp tác Bản Việt)
+momo,momo.vn,vi_dien_tu,chua_xac_minh,
+zalopay,zalopay.vn,vi_dien_tu,chua_xac_minh,
+vnpay,vnpay.vn,vi_dien_tu,chua_xac_minh,
+vnpay,vnpayqr.vn,vi_dien_tu,chua_xac_minh,
+viettelmoney,viettelmoney.vn,vi_dien_tu,chua_xac_minh,Tên cũ ViettelPay
+shopeepay,shopeepay.vn,vi_dien_tu,chua_xac_minh,Tên cũ AirPay
+payoo,payoo.vn,vi_dien_tu,chua_xac_minh,
+vnptmoney,vnptmoney.vn,vi_dien_tu,chua_xac_minh,
+moca,moca.vn,vi_dien_tu,chua_xac_minh,Đã dừng dịch vụ 2024 — cân nhắc bỏ khi rà
+shopee,shopee.vn,thuong_mai_dien_tu,chua_xac_minh,
+lazada,lazada.vn,thuong_mai_dien_tu,chua_xac_minh,
+tiki,tiki.vn,thuong_mai_dien_tu,chua_xac_minh,
+sendo,sendo.vn,thuong_mai_dien_tu,chua_xac_minh,
+thegioididong,thegioididong.com,thuong_mai_dien_tu,chua_xac_minh,
+dienmayxanh,dienmayxanh.com,thuong_mai_dien_tu,chua_xac_minh,
+bachhoaxanh,bachhoaxanh.com,thuong_mai_dien_tu,chua_xac_minh,
+fptshop,fptshop.com.vn,thuong_mai_dien_tu,chua_xac_minh,
+cellphones,cellphones.com.vn,thuong_mai_dien_tu,chua_xac_minh,
+chotot,chotot.com,thuong_mai_dien_tu,chua_xac_minh,
+viettel,viettel.vn,vien_thong,chua_xac_minh,
+viettel,viettel.com.vn,vien_thong,chua_xac_minh,
+vnpt,vnpt.com.vn,vien_thong,da_xac_minh,
+mobifone,mobifone.vn,vien_thong,chua_xac_minh,
+vinaphone,vinaphone.com.vn,vien_thong,chua_xac_minh,Thương hiệu di động của VNPT
+fpt,fpt.vn,vien_thong,chua_xac_minh,
+fpt,fpt.com.vn,vien_thong,chua_xac_minh,
+vng,vng.com.vn,vien_thong,chua_xac_minh,
+zalo,zalo.me,vien_thong,chua_xac_minh,Domain .me (không phải .vn)
+vietnamairlines,vietnamairlines.com,hang_khong,chua_xac_minh,
+vietjetair,vietjetair.com,hang_khong,chua_xac_minh,
+bambooairways,bambooairways.com,hang_khong,chua_xac_minh,
+dichvucong,dichvucong.gov.vn,dich_vu_cong,chua_xac_minh,
+vneid,vneid.gov.vn,dich_vu_cong,chua_xac_minh,
+gdt,gdt.gov.vn,dich_vu_cong,chua_xac_minh,Tổng cục Thuế — kiểm tra lại sau sáp nhập bộ ngành 2025
+baohiemxahoi,baohiemxahoi.gov.vn,dich_vu_cong,chua_xac_minh,
+evn,evn.com.vn,dich_vu_cong,chua_xac_minh,Tập đoàn Điện lực
