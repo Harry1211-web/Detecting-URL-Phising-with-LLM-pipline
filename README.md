@@ -99,11 +99,15 @@ Chi tiết: `Plan.md` mục 3.
 - **Feature selection 81 → 30**: mốc `top-30` (theo importance RF v1) giữ ~99,9% ROC-AUC
   5-fold (0,99235 vs 0,99353) — tập nhỏ nhất trong khoảng 30–42 còn trong dung sai 0,002.
   Chốt vào `contracts.MODEL_FEATURES_FINAL` (30) + `FAST_FEATURES_FINAL` (25, bỏ nhóm ngoài).
-- **RF bản cuối (30 đặc trưng)**: k-fold ROC-AUC 0,9923 / test accuracy 0,954 — chi phí ~0,7
-  điểm so với 81 đặc trưng.
+- **RF bản cuối (30 đặc trưng, grid rộng `--full`, xác nhận 2026-09-11)**: k-fold ROC-AUC
+  0,9924 / test accuracy 0,9545 — chi phí ~0,7 điểm so với 81 đặc trưng. `n_estimators=400`
+  nay là giá trị **giữa** grid `{200,400,600}` (trước ở biên grid rút gọn) — điểm số gần như
+  không đổi so với grid rút gọn → xác nhận không phải do grid hẹp.
 - **XGBoost (30 đặc trưng)** nhỉnh hơn: k-fold ROC-AUC **0,9942**, test accuracy 0,963, train
   nhanh hơn RF ~5×. Ghi nhận là phương án dự phòng mạnh; RF vẫn là mô hình theo thiết kế.
-- **Bản "chỉ đặc trưng nhanh" (25 đặc trưng, không mạng)** tụt **2,6 điểm accuracy** / 1,5 điểm
+  `XGB_GRID_QUICK` **chưa mở rộng** (4 tham số đều nhị phân → luôn "chạm biên" theo cấu trúc) —
+  ưu tiên thấp vì chỉ là phương án dự phòng.
+- **Bản "chỉ đặc trưng nhanh" (25 đặc trưng, không mạng)** tụt **2,5 điểm accuracy** / 1,5 điểm
   ROC-AUC → nhánh fallback lúc RDAP/WHOIS/Google timeout không được tin `rf_fast` một mình.
 - **Override #1** (`src/override/domain_age.py`): RDAP (IANA bootstrap) → WHOIS fallback,
   timeout 0,5s/bước, `.vn` bỏ qua RDAP, rỗng cả hai → `flag="unknown"` (không mặc định an toàn).

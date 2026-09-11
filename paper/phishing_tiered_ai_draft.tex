@@ -8,10 +8,10 @@
 %% If diacritics do not render, compile with XeLaTeX or LuaLaTeX instead
 %% (remove the inputenc/fontenc lines and add \usepackage{fontspec}).
 %%
-%% STATUS: system-design and evaluation-protocol paper. No empirical results
-%% for the proposed system are reported. Cited quantitative values are sourced;
-%% "target"/"budget" values are design goals; "preliminary inspection" values
-%% are the authors' own observations on the public training file.
+%% STATUS: system-design paper with preliminary Layer-B results (Section
+%% "Preliminary Results"); the suspicious-zone LLM stage is not yet built.
+%% Layer-B numbers are reproducible from committed scripts, on the balanced
+%% 50/50 split. "target"/"budget" values are design goals, not measurements.
 
 \documentclass[conference]{IEEEtran}
 \IEEEoverridecommandlockouts
@@ -63,9 +63,12 @@ human-readable explanation, and any domain it confirms malicious is written back
 into Layer~A. We motivate each choice against the literature, give a simple cost
 model for why self-hosted inference removes the incentive to split ``grey'' and
 ``black'' LLM tiers, and analyze the LLM stage's security exposure with the OWASP
-Top~10 for LLM Applications~(2025). We close with a pre-registered evaluation
-protocol. \emph{No results for the proposed system are reported here; this paper
-specifies an architecture and a measurement plan.}
+Top~10 for LLM Applications~(2025), and pre-register an evaluation protocol.
+\emph{Layer~B is implemented: on the balanced benchmark the compact
+30-feature Random Forest reaches test ROC-AUC $0.991$ / accuracy $0.954$, and a
+network-free variant loses $2.5$ accuracy points, quantifying the pipeline's
+dependence on external lookups. The suspicious-zone LLM stage is not yet built;
+its evaluation, and threshold calibration on realistic traffic, are future work.}
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -94,8 +97,11 @@ quyết cuối cùng kèm giải thích; domain bị xác nhận nguy hiểm đ�
 luận cho từng lựa chọn thiết kế dựa trên tài liệu, đưa ra một mô hình chi phí đơn
 giản giải thích vì sao suy luận tự host loại bỏ động lực tách hai mức LLM, và phân
 tích rủi ro bảo mật của tầng LLM theo OWASP Top~10 for LLM Applications~(2025).
-Bài báo kết thúc bằng một giao thức đánh giá đăng ký trước. \emph{Bài báo không
-báo cáo kết quả thực nghiệm của hệ thống đề xuất.}
+Bài báo kèm một giao thức đánh giá đăng ký trước. \emph{Lớp~B đã hiện thực: trên
+bộ dữ liệu cân bằng, Random Forest rút gọn 30 đặc trưng đạt ROC-AUC $0{,}991$ /
+độ chính xác $0{,}954$ trên tập test, và bản chỉ dùng đặc trưng không cần mạng
+mất $2{,}5$ điểm độ chính xác. Tầng LLM ở vùng nghi ngờ chưa được xây; việc đánh
+giá tầng này và hiệu chỉnh ngưỡng trên traffic thực tế là hướng phát triển tiếp.}
 
 \medskip
 \noindent\textbf{Từ khóa:} phát hiện phishing, học máy, mô hình ngôn ngữ lớn, RAG,
@@ -149,8 +155,9 @@ including a shared-blocklist self-poisoning risk we have not seen discussed
 elsewhere; (iii)~a design-rationale analysis, with a simple cost model, tying
 each choice to the literature and to consumer-grade hardware constraints; and
 (iv)~a pre-registered evaluation protocol with fixed numeric targets and
-pass/fail criteria. We report \emph{no} performance results for the proposed
-system; producing them is the subject of ongoing work.
+pass/fail criteria, and preliminary Layer~B results against it
+(Section~\ref{sec:results}). The suspicious-zone LLM stage is not yet built, so
+no end-to-end detection claim is made.
 
 \section{Related Work}
 
@@ -168,12 +175,15 @@ Data~\cite{hannousse2021dataset}: 11{,}430 URLs, 87 features, exactly balanced
 (50\% phishing / 50\% legitimate). The features are 56 from the URL string, 24
 from page content, and 7 from external services~\cite{hannousse2021benchmark}.
 This split maps onto Layer~B: the 7 external-service features correspond to
-signals our override rules recompute directly. Our own preliminary inspection of
-the public file found three all-zero (constant) features---\texttt{sfh},
-\texttt{ratio\_intErrors}, \texttt{ratio\_intRedirection}---and one feature,
-\texttt{google\_index}, with a notably strong univariate association with the
-label; both are stated only as observations on the training file and inform, but
-do not by themselves determine, feature selection.
+signals our override rules recompute directly. Our exploratory analysis of the
+public file (Section~\ref{sec:results}) found \emph{six} all-zero (constant)
+features in this release---\texttt{sfh}, \texttt{ratio\_intErrors},
+\texttt{ratio\_intRedirection}, \texttt{nb\_or}, \texttt{ratio\_nullHyperlinks},
+\texttt{submit\_email}---and that \texttt{google\_index} has by far the strongest
+univariate association with the label (Pearson $r=0.73$), followed by
+\texttt{page\_rank} ($r=-0.51$). It also found \texttt{domain\_age} set to its
+``not resolved'' sentinel in 15.6\,\% of rows---direct evidence that missing
+registration data is common and must not be read as benign.
 
 Beyond this benchmark, the community also uses the classic UCI feature set of
 Mohammad \emph{et al.}~\cite{mohammad2012assessment} and, more recently, the
@@ -382,23 +392,24 @@ local allow-list for that user.
 Layer~B runs on the backend, which fetches the page once and computes all 87
 features there so the extension never needs page-parsing or network-lookup logic.
 
-\textbf{Classifier.} A Random Forest~\cite{breiman2001rf} over the 87-feature
-representation. Hyper-parameters are chosen by grid search inside a $k=5$
-cross-validation, with an \emph{outer} locked test split (equivalently, nested
-cross-validation) used only for the numbers reported in Section~\ref{sec:eval-a},
-so model selection never sees the evaluation data. Feature reduction to the
-strongest $\approx$30--42 features uses \emph{permutation} importance measured on
-held-out folds (impurity importance is biased toward high-cardinality features);
-a compact model is then retrained, following~\cite{tamal2024ofva} and general
-practice~\cite{safi2023slr,divakaran2022review}. Three features that are constant
-in this dataset release (\texttt{sfh}, \texttt{ratio\_intErrors},
-\texttt{ratio\_intRedirection}) are dropped up front. Two further features are
-kept but flagged as non-stationary: \texttt{web\_traffic} (Alexa-derived; Alexa
-ranks were retired in May~2022, so this feature cannot be reproduced live and is
-imputed as ``unknown'' at inference time), and \texttt{google\_index}, which had
-the strongest univariate association with the label in our inspection but is
-exactly the kind of signal that drifts --- search engines de-index known phishing
-quickly, so its training-time and deployment-time distributions differ.
+\textbf{Classifier.} A Random Forest~\cite{breiman2001rf} over the feature
+representation. Six features that are all-zero in this dataset release
+(\texttt{sfh}, \texttt{ratio\_intErrors}, \texttt{ratio\_intRedirection},
+\texttt{nb\_or}, \texttt{ratio\_nullHyperlinks}, \texttt{submit\_email}) are
+dropped up front, leaving 81. Hyper-parameters are chosen by grid search inside a
+$k=5$ cross-validation, with an \emph{outer} locked 80/20 test split used only for
+the reported numbers so model selection never sees the evaluation data. Feature
+reduction ranks by the Random Forest's importances and takes the smallest cut in
+the 30--42 range whose 5-fold ROC-AUC stays within 0.002 of the all-81 baseline;
+in our run (Section~\ref{sec:results}) that cut is 30 features. A second,
+network-free model over the 25 lexical/content features of that set
+(\texttt{rf\_fast}) is trained as the fallback for when the external lookups
+time out. Two of the retained features are flagged as non-stationary:
+\texttt{web\_traffic} (Alexa-derived; Alexa ranks were retired in May~2022, so it
+cannot be reproduced live and is imputed as ``unknown'' at inference time), and
+\texttt{google\_index}, which carries the strongest signal in training
+($r=0.73$) but is exactly the kind that drifts --- search engines de-index known
+phishing quickly, so its training-time and deployment-time distributions differ.
 
 \textbf{Override rules} (Table~\ref{tab:override}), run \emph{in parallel with}
 the Random Forest and combined with its score at the zoning step:
@@ -408,21 +419,27 @@ JSON and its query/response/bootstrap behavior is
 standardized~\cite{rfc9082,rfc9083,rfc9224}; since 28 January 2025 ICANN no longer
 requires gTLD registries to run port-43 WHOIS~\cite{icann_rdap}. The IANA RDAP
 bootstrap registry gives the authoritative server per TLD~\cite{rfc9224}.
-\texttt{.vn} is not currently served by RDAP, so Vietnamese domains fall through
-to WHOIS in practice---expected, not an error. Each step has a short timeout
-(target $\approx$500\,ms). If both sources return nothing---including deliberate
-registration-privacy redaction---the rule reports ``unknown,'' which is
-\emph{not} treated as safe.
-\item \textbf{TLS certificate.} A missing/invalid certificate, or one issued
-within the last two days, raises a flag; very fresh certificates correlate with
-disposable phishing infrastructure.
+\texttt{.vn} is on a fixed no-RDAP list, so Vietnamese domains skip RDAP and go
+straight to WHOIS---expected, not an error. Each step has a short timeout
+($\approx$500\,ms; 3\,s for the one-time bootstrap fetch). A domain younger than a
+configurable threshold (default 90 days, calibrated with the zoning threshold in
+Section~\ref{sec:eval-b}) is flagged. If both sources return nothing---including
+deliberate registration-privacy redaction---the rule reports ``unknown,'' which
+is \emph{not} treated as safe.
+\item \textbf{TLS certificate.} An authenticated TLS handshake is opened; a
+certificate that fails validation (self-signed, expired, wrong host, unknown CA)
+or one issued within the last two days raises a flag, and an unreadable
+certificate reports ``unknown.'' Because this rule dials an attacker-controlled
+host, the probe is hardened against server-side request forgery
+(Section~\ref{sec:security}).
 \item \textbf{Typosquatting.} Levenshtein edit distance~\cite{levenshtein1966}
-between the registrable domain and each entry in a curated Vietnamese
-brand-domain list; measurement studies of typosquatting abuse motivate
-edit-distance screening~\cite{szurdi2014typo,agten2015typo}. The acceptance
-threshold scales with brand-name length as
-$\max(1,\lfloor \mathrm{len(brand)}/5 \rfloor)$, so short names do not generate
-false matches. Edit distance alone misses homoglyph substitutions (e.g.\ Cyrillic
+between the registrable-domain label and each entry in a 62-brand curated
+Vietnamese list (banks, e-wallets, e-commerce, telecom/tech, airlines, public
+services); measurement studies of typosquatting abuse motivate edit-distance
+screening~\cite{szurdi2014typo,agten2015typo}. The acceptance threshold scales
+with brand-name length as $\max(1,\lfloor \mathrm{len(brand)}/5 \rfloor)$ and
+brands shorter than 5 characters are excluded, so short names do not generate
+false matches. This rule is pure computation and never reports ``unknown.'' Edit distance alone misses homoglyph substitutions (e.g.\ Cyrillic
 look-alikes); a skeleton/confusable normalization before the comparison is a
 planned addition, and the false-match rate of the rule is reported in
 Section~\ref{sec:eval-a}.
@@ -639,6 +656,15 @@ evades both the classifier and all three rules is a genuine blind spot.
 Section~\ref{sec:eval-b} measures the low-zone false-negative rate for this
 reason.
 
+\textbf{Server-side request forgery via the override probes.} The domain-age and
+TLS override rules open outbound connections to the host under analysis, which an
+attacker controls. The implemented probe restricts connections to standard HTTPS
+ports, resolves the hostname and refuses loopback, private, link-local, and other
+non-public addresses, and pins the socket to the vetted IP while keeping the
+original SNI, which closes a DNS-rebinding window. Error reasons are fixed
+classifier strings, never raw exception text, so the probe cannot be used to
+exfiltrate internal responses.
+
 \textbf{Excessive agency (LLM06).} The model emits only a verdict and
 explanation; it has no content-driven tool-calling. The single automated
 downstream effect---a Layer~A write-back---is gated on a confirmed-malicious
@@ -651,10 +677,11 @@ a pre-recorded/cached demonstration path.
 
 \section{Evaluation Methodology (pre-registered)}
 \label{sec:eval}
-No results for the proposed system are reported. This plan --- metrics, numeric
-targets, and pass/fail criteria --- is fixed in advance so that later results
-cannot be selectively framed. Table~\ref{tab:targets} collects the targets;
-they are design goals, not measurements.
+This plan --- metrics, numeric targets, and pass/fail criteria --- was fixed in
+advance so that later results cannot be selectively framed. Section~\ref{sec:results}
+reports what has been executed so far (Layer~B); the suspicious zone is not yet
+implemented and none of its rows below are answered. Table~\ref{tab:targets}
+collects the targets; they are design goals, not measurements.
 
 \begin{table}[t]
 \centering
@@ -690,11 +717,12 @@ Hyper-parameters are tuned by grid search \emph{inside} a $k=5$ cross-validation
 the headline numbers come from an outer locked test partition (nested design) so
 selection never touches the reported set. Report precision, recall, F1, and
 ROC-AUC as outer-split values with 95\,\% confidence intervals, and the per-fold
-mean\,$\pm$\,SD from the inner CV separately. Drop the three constant features
-(\texttt{sfh}, \texttt{ratio\_intErrors}, \texttt{ratio\_intRedirection}); repeat
-for the $\approx$30--42-feature compact model. Also report a reliability diagram,
-since the score is thresholded downstream, and the false-match rate of the
-typosquatting rule against the curated brand list.
+mean\,$\pm$\,SD from the inner CV separately. Drop the six constant features;
+repeat for the compact model. Also report a reliability diagram, since the score
+is thresholded downstream, and the false-match rate of the typosquatting rule
+against the curated brand list. Results so far are in Section~\ref{sec:results};
+still outstanding here are the confidence intervals, the reliability diagram, and
+the by-registrable-domain deduplication.
 
 \subsection{Decision-threshold calibration}
 \label{sec:eval-b}
@@ -775,11 +803,86 @@ Report suspicious-zone routing rate and end-to-end verdict quality with
 (i)~override rules disabled, (ii)~Tier-1 RAG disabled, (iii)~Tier-2 RAG disabled,
 (iv)~self-learning write-back disabled, and (v)~the Tranco allow-list disabled.
 
+\section{Preliminary Results (Layer~B)}
+\label{sec:results}
+Layer~B has been implemented and evaluated on the training benchmark. All figures
+below are reproducible from committed scripts and are on the \emph{balanced}
+50/50 split; they are not operating-point numbers (Section~\ref{sec:lim}). The
+suspicious zone is not yet built, so Sections~\ref{sec:eval-c}--\ref{sec:eval-h}
+report nothing.
+
+\textbf{Exploratory analysis.} The dataset is exactly balanced
+(5{,}715 / 5{,}715), has no missing cells, and contains one duplicated URL
+(removed before splitting). Six features are all-zero (listed in
+Section~\ref{sec:arch-b}). The strongest label correlations are
+\texttt{google\_index} ($r=+0.73$), \texttt{page\_rank} ($r=-0.51$), and
+\texttt{nb\_www} ($r=-0.44$); \texttt{domain\_age} sits at its ``not resolved''
+sentinel in 15.6\,\% of rows.
+
+\textbf{Classifier.} After dropping the six constants (81 features), a stratified
+80/20 split (train 9{,}143 / test 2{,}286) and grid search over a $k=5$
+stratified CV (refit on ROC-AUC, \texttt{random\_state}=42) give the reference
+model \texttt{rf\_v1}: 5-fold ROC-AUC $0.9935\pm0.0007$; held-out test ROC-AUC
+$0.9924$, accuracy $0.961$, $F_1$(phishing) $0.961$. The CV--test gap is below
+$0.01$. Importance-ranked reduction selects 30 features --- the smallest cut whose
+5-fold ROC-AUC ($0.9924$) stays within $0.002$ of the all-81 value ($0.9935$).
+The compact \texttt{rf\_final} scores test ROC-AUC $0.991$ and accuracy $0.954$:
+the $81\!\to\!30$ cut costs about $0.7$ accuracy points for 51 fewer features
+(Table~\ref{tab:models}).
+
+\begin{table}[t]
+\centering
+\caption{Layer~B models, same split and grid. \texttt{rf\_fast} uses only the 25
+network-free features; \texttt{xgb\_final} uses the same 30 as \texttt{rf\_final}.
+Balanced-set numbers, not operating points.}
+\label{tab:models}
+\footnotesize
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+Model & Feat. & CV ROC-AUC & Test ROC-AUC & Test $F_1$ & Test acc. \\
+\midrule
+\texttt{rf\_v1}    & 81 & 0.9935 & 0.9924 & 0.9612 & 0.9611 \\
+\texttt{rf\_final} & 30 & 0.9924 & 0.9914 & 0.9547 & 0.9545 \\
+\texttt{rf\_fast}  & 25 & 0.9772 & 0.9763 & 0.9292 & 0.9296 \\
+\texttt{xgb\_final}& 30 & 0.9942 & 0.9924 & 0.9634 & 0.9633 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{External-lookup dependency.} The network-free \texttt{rf\_fast} trails
+\texttt{rf\_final} by $2.5$ accuracy points and $3.4$ points of phishing recall;
+the five external-service features carry $\approx$46\,\% of the compact model's
+importance. The technical-only fallback path therefore cannot rely on the fast
+model alone --- it must lean on the override rules and route uncertain cases to
+the suspicious zone.
+
+\textbf{Gradient boosting.} On the same 30 features, \texttt{xgb\_final} matches
+the all-81 \texttt{rf\_v1} on every test metric while training about
+$5\times$ faster. It is recorded as a strong alternative; the final choice is
+deferred to threshold calibration, since balanced-set accuracy is not the
+operating criterion.
+
+\textbf{Override rules.} All three are implemented with offline unit tests
+(network calls monkeypatched; 48 tests, all passing). Live checks: rule~1 flags
+no well-known domain (\texttt{github.com}, \texttt{google.com}) and returns
+``unknown'' for \texttt{vietcombank.com.vn} (\texttt{.vn} WHOIS exceeds the
+0.5\,s budget); rule~2, against \emph{badssl.com} endpoints, flags self-signed,
+expired, and wrong-host certificates, and the SSRF guard blocks a loopback
+address and a non-HTTPS port (both return ``unknown''); rule~3 runs entirely
+offline against the 62-brand list.
+
 \section{Limitations}
 \label{sec:lim}
 \begin{itemize}
-\item \textbf{No empirical results yet.} This paper is a design and a protocol;
-the numbers that would substantiate a detection claim are not in it.
+\item \textbf{No suspicious-zone results yet.} Layer~B is evaluated
+(Section~\ref{sec:results}); the LLM/RAG stage is not implemented, so its
+accuracy, latency, and injection-resistance are still unmeasured, and no
+end-to-end detection claim is made.
+\item \textbf{Layer~B numbers are balanced-set only.} Every value in
+Section~\ref{sec:results} is on the 50/50 split; the false-positive and routing
+rates that matter operationally await calibration on imbalanced traffic
+(Section~\ref{sec:eval-b}), and by-registrable-domain deduplication is not yet
+applied.
 \item \textbf{Training data is a 2020--2021 snapshot}~\cite{hannousse2021benchmark};
 concept drift is only partly addressed by the PhiUSIIL check~\cite{prasad2024phiusiil},
 and two features are already degraded --- \texttt{web\_traffic} (Alexa retired
@@ -818,18 +921,23 @@ a Random Forest and three technical override rules clear the unambiguous
 remainder; only residual hard cases reach a locally hosted small LLM grounded by
 a two-tier RAG store built for Vietnamese brand impersonation. Self-hosting
 removes per-request pricing, which is why the usual grey/black LLM split is
-unnecessary here. Future work is execution of the pre-registered protocol,
-followed by the browser-extension field trial.
+unnecessary here. Layer~B is built and evaluated (Section~\ref{sec:results}): the
+compact model holds ROC-AUC on the benchmark, and the network-free ablation
+quantifies the cost of losing external lookups. Future work is the suspicious
+zone --- the local model, the two-tier RAG store, and its injection red-team ---
+followed by threshold calibration on realistic traffic and the browser-extension
+field trial.
 
 \section*{Statements}
 \textbf{Data availability.} Training data: Hannousse and Yahiouche, \emph{Web page
 phishing detection}, Mendeley Data V3~\cite{hannousse2021dataset}. PhiUSIIL is at
-the UCI Machine Learning Repository~\cite{prasad2024phiusiil}. The Vietnamese
-brand-domain list and advisory corpus, the override-rule pseudocode, and the
-suspicious-zone prompt templates (system prompt and untrusted-content delimiter
-scheme, needed to audit the injection-resistance claims of
-Section~\ref{sec:security}) will be released with the implementation, subject to
-source licensing.
+the UCI Machine Learning Repository~\cite{prasad2024phiusiil}. The Layer~B
+training scripts, EDA and model reports, and the 62-brand Vietnamese list (a
+working draft pending cross-check against NCSC and \emph{chongluadao.vn}) are in
+the project repository. The advisory corpus and the suspicious-zone prompt
+templates (system prompt and untrusted-content delimiter scheme, needed to audit
+the injection-resistance claims of Section~\ref{sec:security}) will be released
+with the LLM-stage implementation, subject to source licensing.
 
 \textbf{Ethics.} The classifier and protocol work with URLs and publicly served
 web content and involve no human subjects. The browser extension, however,

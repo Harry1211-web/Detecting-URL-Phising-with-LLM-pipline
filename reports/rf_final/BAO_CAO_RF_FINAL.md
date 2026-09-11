@@ -47,24 +47,37 @@ File máy đọc: `reports/rf_final/selected_features.json`.
 
 ## 2. Ba mô hình trên cùng split + cùng GridSearchCV k-fold (k=5)
 
+**Đã chạy `--full` (grid RF rộng, Tuần 4) — bảng dưới là số liệu CHỐT, thay bản
+grid rút gọn trước đó.**
+
 | Mô hình | n đặc trưng | k-fold ROC-AUC | k-fold F1 | test ROC-AUC | test F1 (phishing) | test accuracy | thời gian |
 |---|---|---|---|---|---|---|---|
 | `rf_v1` (tham chiếu) | 81 | 0,9935 | 0,9666 | 0,9924 | 0,9612 | 0,9611 | ~105s |
-| **`rf_final`** | **30** | 0,9923 | 0,9635 | 0,9913 | 0,9543 | 0,9541 | ~55s |
-| `rf_fast` | 25 | 0,9771 | 0,9263 | 0,9762 | 0,9275 | 0,9278 | ~47s |
-| `xgb_final` | 30 | **0,9942** | **0,9692** | **0,9924** | **0,9634** | **0,9633** | ~11s |
+| **`rf_final`** | **30** | 0,9924 | 0,9633 | 0,9914 | 0,9547 | 0,9545 | 476,9s |
+| `rf_fast` | 25 | 0,9772 | 0,9255 | 0,9763 | 0,9292 | 0,9296 | 409,2s |
+| `xgb_final` | 30 | **0,9942** | **0,9692** | **0,9924** | **0,9634** | **0,9633** | 18,6s |
 
-Cấu hình tốt nhất:
-- `rf_final` / `rf_fast`: `n_estimators=400, max_depth=None, min_samples_leaf=1, max_features='sqrt'`.
-- `xgb_final`: `n_estimators=300, max_depth=6, learning_rate=0.1, subsample=0.8`.
+Cấu hình tốt nhất (grid rộng `PARAM_GRID_FULL` cho RF — xem `src/train_rf.py`):
+- `rf_final`: `n_estimators=400, max_depth=20, min_samples_leaf=1, max_features='sqrt'`.
+- `rf_fast`: `n_estimators=600, max_depth=None, min_samples_leaf=1, max_features='sqrt'`.
+- `xgb_final`: `n_estimators=300, max_depth=6, learning_rate=0.1, subsample=0.8`
+  (**`XGB_GRID_QUICK` — chưa mở rộng**, xem mục 4).
+
+So với bản grid rút gọn (Tuần 3): `rf_final` đổi từ `n_estimators=400 (biên trên)` →
+vẫn `400` nhưng nay là **giá trị giữa** của `{200,400,600}` — không còn ở biên; điểm
+số gần như không đổi (ROC-AUC 0,9923→0,9924, accuracy 0,9541→0,9545) → xác nhận
+`n_estimators=400` là tối ưu thật, không phải do grid quá hẹp. `rf_fast` đổi
+`max_depth: 30→None` và `n_estimators: 400→600` (nay là biên trên của
+`{200,400,600}`), điểm nhích nhẹ (accuracy 0,9278→0,9296) — biến động nhỏ, chưa
+cần mở rộng thêm.
 
 Biểu đồ: `fig_so_sanh_mo_hinh.png`, `fig_final_vs_fast_roc.png`, `fig_final_importances.png`.
 Model đã lưu: `models/rf_final.joblib`, `models/rf_fast.joblib`, `models/xgb_final.joblib`.
 
 ### 2.1 Cắt 81 → 30 đặc trưng: chi phí ~0,7 điểm accuracy
 
-`rf_final` bằng `rf_v1` về ROC-AUC (0,9913 vs 0,9924) nhưng test accuracy giảm
-0,9611 → 0,9541 và F1 phishing 0,9612 → 0,9543. Đổi lại: ít hơn 51 đặc trưng,
+`rf_final` bằng `rf_v1` về ROC-AUC (0,9914 vs 0,9924) nhưng test accuracy giảm
+0,9611 → 0,9545 và F1 phishing 0,9612 → 0,9547. Đổi lại: ít hơn 51 đặc trưng,
 trong đó cắt được **cả 2 đặc trưng nội dung HTML nặng** (`nb_hyperlinks` vẫn giữ)
 và nhiều đặc trưng lexical gần như vô dụng — service trích đặc trưng của Bạn A nhẹ hơn.
 
@@ -79,13 +92,13 @@ quyết định cuối để lại sau khi hiệu chỉnh ngưỡng (Tuần 6) v
 ### 2.3 Bỏ tra cứu ngoài → mô hình yếu đi rõ rệt (định lượng rủi ro #1 của RF v1)
 
 `rf_fast` (25 đặc trưng, tính hoàn toàn không cần mạng) so với `rf_final`:
-- test accuracy **0,9278 vs 0,9541** → tụt **2,6 điểm**.
-- test ROC-AUC 0,9762 vs 0,9913 → tụt **1,5 điểm**.
-- test recall phishing 0,9239 vs 0,9589 → **bỏ lọt thêm ~3,5% URL lừa đảo**.
+- test accuracy **0,9296 vs 0,9545** → tụt **2,5 điểm**.
+- test ROC-AUC 0,9763 vs 0,9914 → tụt **1,5 điểm**.
+- test recall phishing 0,9248 vs 0,9589 → **bỏ lọt thêm ~3,4% URL lừa đảo**.
 
-5 đặc trưng tra cứu ngoài trong `rf_final` chiếm **~46% tổng importance**
-(`google_index` 0,23; `page_rank` 0,12; `web_traffic` 0,08; `domain_age` 0,034;
-`domain_registration_length` nhỏ) — tập trung hơn cả RF v1 (~40%) vì đã cắt bớt
+5 đặc trưng tra cứu ngoài trong `rf_final` chiếm **47,5% tổng importance**
+(`google_index` 23,2%; `page_rank` 11,7%; `web_traffic` 8,0%; `domain_age` 3,4%;
+`domain_registration_length` 1,3%) — tập trung hơn cả RF v1 (~40%) vì đã cắt bớt
 đặc trưng lexical yếu.
 
 → **Hệ quả cho pipeline:** nhánh fallback khi RDAP/WHOIS/Google timeout **không được
@@ -126,10 +139,13 @@ Test offline (không chạm mạng, monkeypatch 2 hàm tra cứu): `tests/test_d
 
 ## 4. Rủi ro / việc còn nợ (chuyển tiếp)
 
-1. **Grid vẫn rút gọn, cấu hình tốt nhất chạm biên.** `rf_final` `n_estimators=400`
-   (biên trên grid quick), `xgb_final` `max_depth=6` + `n_estimators=300` (đều ở
-   biên). Chạy `python -m src.train_rf_final --full` (grid RF rộng) và mở rộng
-   `XGB_GRID_QUICK` trước khi khoá số cuối cùng.
+1. ~~Grid vẫn rút gọn, cấu hình RF tốt nhất chạm biên.~~ **Đã chạy `--full` (2026-09-11)**
+   — xem mục 2: `rf_final`/`rf_fast` không còn ở biên grid, điểm số ổn định.
+   **Còn nợ: `XGB_GRID_QUICK` chưa mở rộng** — cả 4 tham số (`n_estimators`,
+   `max_depth`, `learning_rate`, `subsample`) đều nhị phân nên cấu hình tốt nhất
+   luôn "chạm biên" theo cấu trúc; không kết luận được liệu nới grid có đổi kết
+   quả hay không cho tới khi thử. Ưu tiên thấp vì XGBoost chỉ là phương án dự
+   phòng (RF vẫn là mô hình theo thiết kế).
 2. **`domain_age == -1` (15,6% dòng, EDA Tuần 1) vẫn coi là số −1.** Khi Bạn A ghép
    feature vào service, thêm cờ nhị phân `domain_age_unknown` để tách "domain non"
    khỏi "không tra được" — hiện RF gộp chung.
