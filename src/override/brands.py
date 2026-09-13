@@ -1,4 +1,4 @@
-"""Nạp danh sách thương hiệu VN từ ``dataset/brands/vn_brand_domains.csv``.
+"""Nạp danh sách thương hiệu VN từ ``Dataset/brands/vn_brand_domains.csv``.
 
 Dùng bởi:
   - Override #3 (typosquatting Levenshtein) — ``src/override/typosquatting.py``.

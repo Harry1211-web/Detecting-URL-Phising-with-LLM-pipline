@@ -9,7 +9,7 @@ from src.contracts import (
     FEATURE_NAMES,
     LEXICAL_FEATURES,
     OverrideResult,
-    RF_LOW_RISK_THRESHOLD_DEFAULT,
+    CLF_LOW_RISK_THRESHOLD_DEFAULT,
     phan_vung,
 )
 
@@ -43,18 +43,18 @@ def test_groups_partition_feature_names():
     assert set(CONTENT_FEATURES).isdisjoint(EXTERNAL_FEATURES)
 
 
-def test_phan_vung_low_zone_needs_low_rf_and_all_false():
-    lo = RF_LOW_RISK_THRESHOLD_DEFAULT - 0.05
-    hi = RF_LOW_RISK_THRESHOLD_DEFAULT + 0.05
+def test_phan_vung_low_zone_needs_low_clf_and_all_false():
+    lo = CLF_LOW_RISK_THRESHOLD_DEFAULT - 0.05
+    hi = CLF_LOW_RISK_THRESHOLD_DEFAULT + 0.05
     assert phan_vung(lo, [_ov(False), _ov(False)]) == "vung_thap"
     assert phan_vung(lo, []) == "vung_thap"
-    # RF cao -> nghi ngờ dù override sạch
+    # clf_score cao -> nghi ngờ dù override sạch
     assert phan_vung(hi, [_ov(False)]) == "vung_nghi_ngo"
-    # 1 cờ true -> nghi ngờ dù RF thấp
+    # 1 cờ true -> nghi ngờ dù clf_score thấp
     assert phan_vung(lo, [_ov(True), _ov(False)]) == "vung_nghi_ngo"
     # "unknown" KHÔNG coi là an toàn
     assert phan_vung(lo, [_ov("unknown")]) == "vung_nghi_ngo"
 
 
 def test_phan_vung_threshold_is_strict():
-    assert phan_vung(RF_LOW_RISK_THRESHOLD_DEFAULT, []) == "vung_nghi_ngo"
+    assert phan_vung(CLF_LOW_RISK_THRESHOLD_DEFAULT, []) == "vung_nghi_ngo"

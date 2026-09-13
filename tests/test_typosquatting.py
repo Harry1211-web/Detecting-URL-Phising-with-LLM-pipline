@@ -1,7 +1,7 @@
 """Kiểm Override #3 (src/override/typosquatting.py) — thuần tính toán, không mạng.
 
 Bám ngưỡng PhishMatch (arXiv:2112.02226): ngưỡng-theo-độ-dài, **không loại nhãn
-ngắn**. Brand VN thật trong dataset/brands/vn_brand_domains.csv.
+ngắn**. Brand VN thật trong Dataset/brands/vn_brand_domains.csv.
 """
 
 from src.override.typosquatting import kiem_tra_typosquatting as f

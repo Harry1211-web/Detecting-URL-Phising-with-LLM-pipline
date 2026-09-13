@@ -28,6 +28,9 @@ src/features/hannousse_yahiouche/
 # Công cụ cộng tác markdown (chứa token phiên cục bộ — không commit)
 .markdown-collab/
 
+# Output build LaTeX (tái tạo được từ paper/*.tex)
+paper/out/
+
 # IDE / OS
 .idea/
 .vscode/

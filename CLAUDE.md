@@ -22,7 +22,8 @@ cần làm" ở dưới là bắt đầu từ số 0, không phải sửa code c
 Phân loại URL theo **độ tin cậy** thay vì gọi LLM cho mọi request — mục tiêu giữ tốc độ cho phần lớn
 traffic rõ ràng an toàn, chỉ tốn tài nguyên phân tích sâu cho phần thật sự đáng ngờ. Có 2 lớp phòng
 thủ chạy trước khi cần đến AI tạo sinh: (1) blocklist tĩnh chặn tức thì domain đã biết xấu, (2) mô
-hình nhẹ (Random Forest) + luật kỹ thuật (Override) lọc nhanh phần lớn URL mới. Chỉ khi cả 2 lớp đó
+hình nhẹ (**XGBoost** — chốt 2026-09-13, thay Random Forest ban đầu sau khi so cùng grid rộng, xem
+mục Kiến trúc điểm 2) + luật kỹ thuật (Override) lọc nhanh phần lớn URL mới. Chỉ khi cả 2 lớp đó
 không đủ chắc chắn thì mới gọi Ollama (LLM local, xem lý do ở mục Kiến trúc) để phân tích sâu và sinh
 giải thích.
 
@@ -41,13 +42,19 @@ Pipeline khi người dùng click 1 URL:
    **TTL + độ ưu tiên nguồn**, KHÔNG loại theo trạng thái sống/chết (tránh bị cloaking đánh lừa). Giới
    hạn ~30k luật.
 2. **Lớp B — phân tích link mới**:
-   - Trích **87 đặc trưng** (script gốc Hannousse & Yahiouche, tải kèm dataset trên Mendeley) →
-     **Random Forest** (GridSearchCV + k-fold k=5, feature selection giữ ~30–42 đặc trưng mạnh nhất)
-     cho ra điểm rủi ro.
-   - **Luật Override** chạy song song với RF (không phải gate riêng), 3 nhánh:
+   - Trích **87 đặc trưng** (script gốc Hannousse & Yahiouche, vendored `src/features/hannousse_yahiouche/`)
+     → feature selection còn **30 đặc trưng mạnh nhất** (`GridSearchCV` + k-fold k=5 để chọn/xác nhận)
+     → chấm điểm rủi ro bằng **XGBoost** (chốt 2026-09-13; xem `docs/interface_contract.md` mục 0 và
+     `reports/rf_final/BAO_CAO_RF_FINAL.md` mục 2). **Random Forest** (thiết kế ban đầu) vẫn được
+     train + báo cáo song song làm đối chiếu/phương án dự phòng — cùng grid rộng, XGBoost thắng mọi
+     chỉ số test nên được chọn chạy trong pipeline; RF không bị bỏ, chỉ không phải bản sản xuất.
+   - **Luật Override** chạy song song với mô hình Lớp B (không phải gate riêng), 3 nhánh:
      - Tuổi domain: **RDAP trước, WHOIS fallback**, timeout ~500ms. Rỗng cả 2 → "không xác định",
        **không mặc định là an toàn**. `.vn` hiện chưa hỗ trợ RDAP (VNNIC chưa triển khai) → domain
-       Việt Nam luôn rơi xuống fallback WHOIS trên thực tế.
+       Việt Nam luôn rơi xuống fallback WHOIS trên thực tế. Ngưỡng "domain non" **900 ngày** — hiệu
+       chỉnh bằng Precision/Recall + F-beta (β=2) trên tập train thay vì chọn tuỳ ý (yêu cầu Recall
+       ≥ 95% BẤT KHẢ THI bằng riêng luật này — xem `src/threshold_domain_age.py`; dùng tầng dự phòng
+       Precision ≥ 95%, tối đa Recall). Vẫn là ngưỡng khởi động, hiệu chỉnh lại Tuần 6.
      - SSL/TLS: chứng chỉ hợp lệ / cấp quá gần đây (< 2 ngày) là cờ đáng ngờ.
      - Typosquatting: **Levenshtein Distance** so với danh sách thương hiệu VN
        (`Dataset/brands/vn_brand_domains.csv`, 63 brand, cột `verified` rà tay theo SBV). Ngưỡng
@@ -56,8 +63,8 @@ Pipeline khi người dùng click 1 URL:
        ngưỡng-theo-độ-dài chứ không cắt nhãn ngắn; tỉ lệ báo nhầm đo riêng khi hiệu chỉnh (Tuần 6).
        *(Bản Tuần 4 đầu dùng `max(1, len(brand)//5)` + loại nhãn < 5 ký tự — đã đảo lại 2026-09-10,
        xem `README.md` mục "Ghi chú rà brand VN".)*
-   - **Phân vùng (2 vùng)**: RF điểm thấp **và** 0 cờ vi phạm override → **Vùng thấp**, cho qua ngay,
-     không gọi LLM. Mọi trường hợp còn lại → **Vùng nghi ngờ**, gọi Ollama.
+   - **Phân vùng (2 vùng)**: điểm mô hình Lớp B thấp **và** 0 cờ vi phạm override → **Vùng thấp**, cho
+     qua ngay, không gọi LLM. Mọi trường hợp còn lại → **Vùng nghi ngờ**, gọi Ollama.
      - *Lý do chỉ 2 vùng, không phải 3*: thiết kế đầu tách vùng xám (LLM nhẹ, rẻ) và vùng đen (LLM
        mạnh, đắt) để kiểm soát **chi phí** API trả phí. Ollama tự host không tính phí theo request nên
        mất lý do tách 2 mức — gộp lại cho pipeline đơn giản hơn.
@@ -69,14 +76,15 @@ Pipeline khi người dùng click 1 URL:
      - Nếu muốn thử mạnh hơn, chấp nhận chậm hơn: `qwen3.5:4b` hoặc `gemma3:4b` (~3,3-3,4GB) — có thể
        tràn một phần sang CPU tuỳ độ dài ngữ cảnh.
    - Ollama là **verdict cuối cùng** cho Vùng nghi ngờ: xác nhận nguy hiểm → chặn + nạp domain vào
-     blocklist DNR (Lớp A); xác nhận có vẻ ổn dù RF/override nghi ngờ → cho qua kèm cảnh báo nhẹ.
+     blocklist DNR (Lớp A); xác nhận có vẻ ổn dù mô hình Lớp B/override nghi ngờ → cho qua kèm cảnh báo nhẹ.
    - RAG 2 tầng hỗ trợ Ollama ra quyết định (chưa có kho dữ liệu — cần tự xây):
      - Tầng 1: tra bảng domain thương hiệu VN chính thức (structured lookup, không cần model).
      - Tầng 2: semantic search trên kho văn bản Chống Lừa Đảo / NCSC — dùng **`nomic-embed-text` qua
        Ollama** để tạo embedding (local, không cần API key ngoài), lưu trong ChromaDB.
    - **Timeout & fallback**: tự đo timeout thực tế sau khi cài model — không giả định lại mốc 3-4 giây
      đã ước tính khi thiết kế còn dùng API cloud (Gemini/GPT-4o); model local trên GTX 1650 nhiều khả
-     năng chậm hơn. Quá timeout → fallback về lý do kỹ thuật thuần từ RF/Override.
+     năng chậm hơn. Quá timeout → fallback về lý do kỹ thuật thuần từ mô hình Lớp B/Override
+     (định dạng cụ thể: `docs/interface_contract.md` mục 6.3).
 
 ## Việc cần làm (thư mục đang trống code)
 
@@ -84,8 +92,10 @@ Theo đúng thứ tự nên làm, dựa trên tài liệu thiết kế:
 
 1. Notebook/script tải `dataset_phishing.csv` + EDA cơ bản (kiểm tra cân bằng nhãn, phân phối đặc
    trưng) trước khi train.
-2. Train Random Forest: GridSearchCV + k-fold (k=5) trên 87 đặc trưng → lấy `feature_importances_` →
-   chọn lại ~30-42 đặc trưng mạnh nhất → train lại bản cuối trên tập đã rút gọn.
+2. ~~Train Random Forest: GridSearchCV + k-fold (k=5) trên 87 đặc trưng → `feature_importances_` →
+   chọn lại ~30-42 đặc trưng mạnh nhất → train lại bản cuối.~~ **Xong** (`src/train_rf*.py`, Tuần
+   2–3) — 30 đặc trưng chốt. **Đã so thêm XGBoost cùng grid rộng và chọn XGBoost làm mô hình sản
+   xuất Lớp B** (2026-09-13, thắng mọi chỉ số test) — xem `docs/interface_contract.md` mục 0.
 3. ~~Viết 3 hàm Override: tuổi domain (RDAP→WHOIS), SSL/TLS, Levenshtein typosquatting.~~ **Xong**
    (`src/override/`, Tuần 3–4). Danh sách brand VN: `Dataset/brands/vn_brand_domains.csv` (63 brand).
 4. Cài Ollama (`ollama pull qwen3.5:2b` + `ollama pull nomic-embed-text`), dựng RAG 2 tầng, viết logic
@@ -175,3 +185,4 @@ hơn vì chọn model nhỏ:
 - **Ollama**: phải chạy `ollama serve` (hoặc app nền) trước khi code Python gọi được — không có sẵn
   "server luôn online" như API cloud, cần tự đảm bảo service đang chạy.
 - Output tiếng Việt trong terminal Windows cần `PYTHONIOENCODING=utf-8`.
+- Không dùng các icon lạ trong tất cả các file (nhưng trả lời bằng tiếng việt)

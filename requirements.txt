@@ -37,3 +37,8 @@ ollama==0.3.3
 
 # --- Kiểm thử ---
 pytest==8.3.3
+
+# --- Trích đặc trưng gốc (chỉ cần khi đã vendor src/features/hannousse_yahiouche/,
+#     xem src/features/README.md — bản --smoke rút gọn không cần 2 gói này) ---
+beautifulsoup4==4.12.3
+dnspython==2.6.1

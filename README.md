@@ -16,10 +16,12 @@ src/contracts.py                     # NGUỒN CHÂN LÝ: 87 đặc trưng, MODE
 src/eda.py                           # EDA dataset (Tuần 1)
 src/train_rf.py                      # train Random Forest v1 — 81 đặc trưng (Tuần 2)
 src/feature_selection.py             # cắt 81 -> 30 đặc trưng, xác nhận bằng ROC-AUC 5-fold (Tuần 3)
-src/train_rf_final.py                # RF bản cuối (30) + bản "chỉ đặc trưng nhanh" (25) + so XGBoost (Tuần 3)
+src/train_rf_final.py                # RF cuối (30) + bản "chỉ đặc trưng nhanh" (25) + XGBoost (Tuần 3;
+                                     #   --full mở rộng grid CẢ 2 mô hình từ 2026-09-13) — XGBoost CHỐT làm mô hình sản xuất
+src/threshold_domain_age.py          # hiệu chỉnh ngưỡng domain_age bằng Precision/Recall + F-beta (2026-09-13)
 src/features/                        # trích 87 đặc trưng — README + trial_extract.py + hannousse_yahiouche/ (script gốc vendored)
-dataset/brands/                      # vn_brand_domains.csv (63 brand VN, cột verified) + brands.csv (86 brand quốc tế, Zenodo) + README
-src/override/                        # 3 luật Override + aggregator + phân vùng; brands.py nạp dataset/brands/vn_brand_domains.csv
+Dataset/brands/                      # vn_brand_domains.csv (63 brand VN, cột verified) + brands.csv (86 brand quốc tế, Zenodo) + README
+src/override/                        # 3 luật Override + aggregator + phân vùng; brands.py nạp Dataset/brands/vn_brand_domains.csv
                                      #   #1 domain_age.py (T3) · #2 ssl_tls.py (T4) · #3 typosquatting.py (T4)
 notebooks/01_eda_dataset_phishing.ipynb
 notebooks/02_train_rf_v1.ipynb
@@ -47,6 +49,8 @@ python -m src.eda                                  # sinh lại reports/eda/
 python -m src.train_rf                              # train RF v1 (81 đặc trưng) -> reports/rf_v1/
 python -m src.feature_selection                     # cắt 81 -> 30 đặc trưng -> reports/rf_final/
 python -m src.train_rf_final                        # RF cuối + fast + XGBoost -> reports/rf_final/ + models/
+python -m src.train_rf_final --full                 # grid rộng CẢ RF lẫn XGBoost (lâu hơn — vài phút tới ~20 phút)
+python -m src.threshold_domain_age                  # hiệu chỉnh ngưỡng domain_age -> reports/domain_age_threshold/
 python -m src.override.brands                       # kiểm danh sách brand VN
 python -m src.override.domain_age --smoke https://github.com     # Override #1 tuổi domain (cần mạng)
 python -m src.override.ssl_tls --smoke https://expired.badssl.com # Override #2 SSL/TLS (cần mạng)
@@ -63,7 +67,7 @@ python -m pytest -q                                # 53 test (contracts + brands
 | **1** | scaffold FastAPI, cài Ollama, scaffold Extension MV3 | ✅ EDA dataset · scaffold repo/contract · trial trích đặc trưng |
 | **2** | orchestrator + wiring 87 đặc trưng + cache 24h | ✅ train RF v1 (GridSearchCV k-fold, ROC-AUC 0,993) · ✅ list brand VN (62 domain) |
 | **3** | client Ollama + hạ tầng RAG | ✅ feature selection 81→30 · ✅ RF cuối + bản nhanh + XGBoost · ✅ Override #1 (tuổi domain) |
-| **4** | job blocklist DNR | ✅ Override #2 (SSL/TLS, chống SSRF) + #3 (typosquatting) · gói `override` + phân vùng · 53 test offline. Sau rà brand: chuyển brand list sang `dataset/brands/*.csv` (cột `verified`), typosquatting đổi sang ngưỡng PhishMatch (bỏ "loại nhãn ngắn") |
+| **4** | job blocklist DNR | ✅ Override #2 (SSL/TLS, chống SSRF) + #3 (typosquatting) · gói `override` + phân vùng · 53 test offline. Sau rà brand: chuyển brand list sang `Dataset/brands/*.csv` (cột `verified`), typosquatting đổi sang ngưỡng PhishMatch (bỏ "loại nhãn ngắn") |
 | 5 | tích hợp #1 · Extension Lớp B | nạp kho RAG Tầng 2 · ghép RAG vào prompt |
 | 6 | hoàn thiện Extension · parity Chrome/Edge | hiệu chỉnh ngưỡng · benchmark Ollama |
 | 7 | gia cố backend · health-check Ollama | red-team prompt injection · concept drift PhiUSIIL |
@@ -92,7 +96,7 @@ Chi tiết: `Plan.md` mục 3.
 - 4 đặc trưng đầu bảng (`google_index`, `page_rank`, `nb_hyperlinks`, `web_traffic`) ≈ 40%
   importance, phần lớn là nhóm tra cứu ngoài → Tuần 3 train thêm bản "chỉ đặc trưng nhanh".
 - Danh sách brand VN (Tuần 2 dựng bản thảo JSON) — **Tuần 4 sau rà: chuyển sang
-  `dataset/brands/vn_brand_domains.csv`** (xem "Ghi chú rà brand VN" dưới).
+  `Dataset/brands/vn_brand_domains.csv`** (xem "Ghi chú rà brand VN" dưới).
 
 ## Ghi chú Tuần 3 (xem `reports/rf_final/BAO_CAO_RF_FINAL.md`)
 
@@ -103,10 +107,11 @@ Chi tiết: `Plan.md` mục 3.
   0,9924 / test accuracy 0,9545 — chi phí ~0,7 điểm so với 81 đặc trưng. `n_estimators=400`
   nay là giá trị **giữa** grid `{200,400,600}` (trước ở biên grid rút gọn) — điểm số gần như
   không đổi so với grid rút gọn → xác nhận không phải do grid hẹp.
-- **XGBoost (30 đặc trưng)** nhỉnh hơn: k-fold ROC-AUC **0,9942**, test accuracy 0,963, train
-  nhanh hơn RF ~5×. Ghi nhận là phương án dự phòng mạnh; RF vẫn là mô hình theo thiết kế.
-  `XGB_GRID_QUICK` **chưa mở rộng** (4 tham số đều nhị phân → luôn "chạm biên" theo cấu trúc) —
-  ưu tiên thấp vì chỉ là phương án dự phòng.
+- **XGBoost (30 đặc trưng, grid rộng 192 cấu hình, xác nhận 2026-09-13)**: k-fold ROC-AUC
+  **0,9943**, test ROC-AUC 0,9922 / accuracy **0,9650** / F1 0,9651 — thắng RF ở MỌI chỉ số
+  test, train nhanh hơn RF ~5×. **→ CHỐT XGBoost làm mô hình sản xuất Lớp B** (thay Random
+  Forest thiết kế ban đầu — xem `docs/interface_contract.md` mục 0). RF vẫn train + báo cáo
+  song song làm đối chiếu/phương án dự phòng.
 - **Bản "chỉ đặc trưng nhanh" (25 đặc trưng, không mạng)** tụt **2,5 điểm accuracy** / 1,5 điểm
   ROC-AUC → nhánh fallback lúc RDAP/WHOIS/Google timeout không được tin `rf_fast` một mình.
 - **Override #1** (`src/override/domain_age.py`): RDAP (IANA bootstrap) → WHOIS fallback,
@@ -131,7 +136,7 @@ Chi tiết: `Plan.md` mục 3.
   - Smoke thật đã kiểm: `vietcombank.com.vn`→False; `self-signed`/`expired`/`wrong.host.badssl.com`→True;
     `127.0.0.1`, `google.com:22`→"unknown" (bị chặn).
 - **Override #3 — Typosquatting** (`src/override/typosquatting.py`): Levenshtein nhãn domain
-  vs 63 brand VN (`dataset/brands/vn_brand_domains.csv`). Thuần tính toán → **không bao giờ `"unknown"`**.
+  vs 63 brand VN (`Dataset/brands/vn_brand_domains.csv`). Thuần tính toán → **không bao giờ `"unknown"`**.
   - 4 kiểu cờ (nghiêm trọng giảm dần): trùng khít tên brand khác domain chính thức ·
     tên brand (≥4 ký tự) là 1 nhãn subdomain · Levenshtein 1..ngưỡng · tên brand (≥6 ký tự) là chuỗi con.
   - **Ngưỡng PhishMatch (arXiv:2112.02226): nhãn ≤10 ký tự → 1, >10 → 2. KHÔNG loại nhãn ngắn.**
@@ -142,19 +147,20 @@ Chi tiết: `Plan.md` mục 3.
   - Không với tới kiểu "brand + từ khoá" tách bằng dấu (`techcombank-xac-thuc.com`, `momo-vn.com`)
     hay domain đặt tên xa hẳn (`secure-momo-login.com`) — để RF nội dung + `brand_in_path` lo.
 - **Gói `src/override/__init__.py`**: `chay_tat_ca_override(url)` → 3 `OverrideResult` theo
-  thứ tự `[domain_age, ssl_tls, typosquatting]`; `phan_vung_tu_url(url, rf_score)` ghép luôn
+  thứ tự `[domain_age, ssl_tls, typosquatting]`; `phan_vung_tu_url(url, clf_score)` ghép luôn
   `contracts.phan_vung` (tiện test/tích hợp — orchestrator sản xuất là việc Bạn A, chạy 3 luật
-  **song song** với RF).
+  **song song** với mô hình Lớp B).
 - **Test**: offline, monkeypatch mọi bước chạm mạng. Tổng repo **53 test**, `pytest -q` xanh.
-- Ngưỡng `NGUONG_CERT_MOI_NGAY=2`, `RF_LOW_RISK_THRESHOLD_DEFAULT=0.30`, `NGUONG_TUOI_MOI_NGAY=90`
-  là **mặc định khởi động** — hiệu chỉnh lại Tuần 6 trên traffic mô phỏng 95% Tranco / 5% phishing.
+- Ngưỡng `NGUONG_CERT_MOI_NGAY=2`, `CLF_LOW_RISK_THRESHOLD_DEFAULT=0.30`, `NGUONG_TUOI_MOI_NGAY=900`
+  (đổi từ 90, xem "Ghi chú hiệu chỉnh domain_age" dưới) là **mặc định khởi động** — hiệu chỉnh
+  lại Tuần 6 trên traffic mô phỏng 95% Tranco / 5% phishing.
 
 ## Ghi chú rà brand VN + đổi thuật toán typosquatting (2026-09-10, Bạn B)
 
-- **Nguồn brand**: chuyển từ `src/override/brands_vn.json` (đã xoá) sang 2 file trong `dataset/brands/`:
+- **Nguồn brand**: chuyển từ `src/override/brands_vn.json` (đã xoá) sang 2 file trong `Dataset/brands/`:
   `vn_brand_domains.csv` (63 brand VN, cột `verified` để rà tay từng dòng theo **SBV**) +
   `brands.csv` (86 brand quốc tế, Zenodo — cho feature extractor gốc). `src/override/brands.py`
-  nạp CSV, gộp theo `brand`. Xem `dataset/brands/README.md`.
+  nạp CSV, gộp theo `brand`. Xem `Dataset/brands/README.md`.
 - **Đối chiếu web (SBV + site thương hiệu)**:
   - **Sacombank** — NHNN QĐ 36/QĐ-QLGS4 ngày 01/6/2026: đổi tên ĐKKD → "NH TMCP Sài Gòn Tài Lộc".
     **Viết tắt SACOMBANK + domain `sacombank.com.vn` giữ nguyên** → nhãn/domain không đổi, chỉ ghi chú.
@@ -163,10 +169,37 @@ Chi tiết: `Plan.md` mục 3.
 - **Typosquatting đổi thuật toán** (theo PhishMatch arXiv:2112.02226): `typosquat_threshold` từ
   `max(1, len//5)` → **`1 nếu len ≤ 10, 2 nếu len > 10`**; **bỏ luật "loại nhãn < 5 ký tự"**.
   Hệ quả: acb/scb/vib/momo/zalo… giờ ĐƯỢC so khớp → nhiều URL bị gắn cờ hơn (conservative, route sang
-  Ollama). Cần đo tỉ lệ báo nhầm ở Section VI-A. **CLAUDE.md mục Kiến trúc vẫn ghi `max(1, len//5)` +
-  "giảm bắt nhầm brand tên ngắn" — cần cập nhật cho khớp.**
+  Ollama). Cần đo tỉ lệ báo nhầm ở Section VI-A. CLAUDE.md mục Kiến trúc đã cập nhật khớp ngưỡng
+  PhishMatch này (xem commit `eb411b3`).
 - **domain_age**: bổ sung docstring về giới hạn cấu trúc (CAIDA/WEIS 2025 ~34% phishing là domain bị
   chiếm → luật mù; Allure 4/2026 chỉ 7% phishing < 30 ngày; Google patent US11777987 dùng 45 ngày).
   Số `NGUONG_TUOI_MOI_NGAY` giữ 90, hiệu chỉnh Tuần 6.
 - `src/features/hannousse_yahiouche/` (sửa lỗi gõ tên thư mục `hannaosse` → `hannousse` cho khớp
   `trial_extract.py`).
+
+## Ghi chú chốt mô hình Lớp B + hiệu chỉnh domain_age + contract (2026-09-13, Bạn B)
+
+**Bạn B tự quyết các mục cần giao tiếp với Bạn A** (Plan.md mục 5: hoán đổi/quyết định linh hoạt khi
+1 bên chưa tới lượt) — Bạn A chưa động tới orchestrator nên không ai bị chặn; xem
+`docs/interface_contract.md` (đã đổi từ "bản thảo chờ A rà" sang "chốt, A triển khai theo").
+
+- **XGBoost thay Random Forest làm mô hình sản xuất Lớp B.** Chạy `--full` cho CẢ 2 mô hình (trước
+  đó `--full` chỉ áp cho RF — đã vá `XGB_GRID_FULL`, 192 cấu hình): `xgb_final` thắng `rf_final`
+  mọi chỉ số test (k-fold ROC-AUC 0,9943 vs 0,9924; test accuracy 0,9650 vs 0,9545). RF vẫn train +
+  báo cáo song song. Chi tiết: `reports/rf_final/BAO_CAO_RF_FINAL.md`.
+- **Đổi tên trường contract theo mô hình mới**: `rf_score`→`clf_score`, `RF_LOW_RISK_THRESHOLD_DEFAULT`
+  →`CLF_LOW_RISK_THRESHOLD_DEFAULT`, `source: "rf_override"`→`"clf_override"` — tên trung lập theo
+  thuật toán, không phải đổi contract nếu đổi mô hình lần nữa. Cập nhật `src/contracts.py`,
+  `src/override/__init__.py`, test liên quan; 53 test vẫn xanh.
+- **Hiệu chỉnh ngưỡng `domain_age` bằng Precision/Recall + F-beta** (`src/threshold_domain_age.py`,
+  `reports/domain_age_threshold/`) thay vì chọn số ngày tuỳ ý:
+  - Yêu cầu đặt ra: Recall ≥ 95% (không bỏ lọt phishing); trong các ngưỡng đạt, chọn Precision cao
+    nhất. **Kết quả: BẤT KHẢ THI** bằng riêng domain_age — Recall chỉ chạm 95% khi ngưỡng vượt
+    ~9.500 ngày (~26 năm), lúc đó Precision rơi về ~50% (ngang ngẫu nhiên) — khớp trực tiếp giới hạn
+    CAIDA/WEIS đã ghi trong `domain_age.py` (domain bị chiếm/lâu năm không thể bắt bằng tuổi domain).
+  - Dùng tầng dự phòng: Precision ≥ 95% (ngang mức tin cậy ngưỡng 90 ngày cũ), tối đa Recall →
+    **900 ngày** (Precision 0,9509, Recall 0,1970) so với 90 ngày cũ (Precision 0,9569, Recall
+    **0,0470**) — cùng mức tin cậy, bắt phishing nhiều gấp **~4,2 lần**. `NGUONG_TUOI_MOI_NGAY`
+    trong `domain_age.py` đã đổi 90 → 900.
+  - **Vẫn là ngưỡng khởi động** (hiệu chỉnh trên tập TRAIN cân bằng 50/50) — hiệu chỉnh lại Tuần 6
+    trên traffic mô phỏng thực tế, giống ngưỡng phân vùng.

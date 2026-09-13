@@ -31,23 +31,23 @@ def test_chay_tat_ca_override_dung_thu_tu_va_ten(monkeypatch):
     assert all(r["flag"] is False for r in kq)
 
 
-def test_phan_vung_tu_url_rf_thap_sach_thi_vung_thap(monkeypatch):
+def test_phan_vung_tu_url_clf_thap_sach_thi_vung_thap(monkeypatch):
     _mock_mang_sach(monkeypatch)
-    zone, flags = ov.phan_vung_tu_url("https://trang-la-nhung-lanh.com", rf_score=0.05)
+    zone, flags = ov.phan_vung_tu_url("https://trang-la-nhung-lanh.com", clf_score=0.05)
     assert zone == "vung_thap"
     assert len(flags) == 3
 
 
-def test_phan_vung_tu_url_rf_cao_thi_nghi_ngo(monkeypatch):
+def test_phan_vung_tu_url_clf_cao_thi_nghi_ngo(monkeypatch):
     _mock_mang_sach(monkeypatch)
-    zone, _ = ov.phan_vung_tu_url("https://trang-la-nhung-lanh.com", rf_score=0.9)
+    zone, _ = ov.phan_vung_tu_url("https://trang-la-nhung-lanh.com", clf_score=0.9)
     assert zone == "vung_nghi_ngo"
 
 
 def test_phan_vung_tu_url_co_co_override_thi_nghi_ngo(monkeypatch):
     _mock_mang_sach(monkeypatch)
     # URL typosquat -> Override #3 = True -> nghi ngờ dù RF thấp
-    zone, flags = ov.phan_vung_tu_url("http://vietccombank.com", rf_score=0.01)
+    zone, flags = ov.phan_vung_tu_url("http://vietccombank.com", clf_score=0.01)
     assert zone == "vung_nghi_ngo"
     assert any(r["name"] == "typosquatting" and r["flag"] is True for r in flags)
 
@@ -59,6 +59,6 @@ def test_domain_age_unknown_keo_ve_nghi_ngo(monkeypatch):
     monkeypatch.setattr(st, "_lay_thong_tin_cert",
                         lambda h, p=443: {"trang_thai": "hop_le", "not_before": _truoc(500),
                                           "not_after": None, "chi_tiet": "ok"})
-    zone, flags = ov.phan_vung_tu_url("https://an-danh.example", rf_score=0.01)
+    zone, flags = ov.phan_vung_tu_url("https://an-danh.example", clf_score=0.01)
     assert zone == "vung_nghi_ngo"
     assert flags[0]["flag"] == "unknown"

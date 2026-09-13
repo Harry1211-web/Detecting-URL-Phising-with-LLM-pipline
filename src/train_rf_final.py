@@ -16,9 +16,17 @@
 Output → reports/rf_final/ (bảng so sánh + biểu đồ) và
          models/rf_final.joblib, models/rf_fast.joblib, models/xgb_final.joblib.
 
-Chạy:  python -m src.train_rf_final           (grid rút gọn)
-       python -m src.train_rf_final --full    (grid rộng hơn — chỉ cho RF)
+Chạy:  python -m src.train_rf_final           (grid rút gọn — RF + XGBoost)
+       python -m src.train_rf_final --full    (grid rộng hơn — CẢ RF lẫn XGBoost)
 Notebook trình bày: notebooks/03_feature_selection_rf_final.ipynb
+
+**Chốt mô hình Lớp B (2026-09-13, Bạn B, tự quyết theo Plan.md mục 5 — Bạn A
+chưa động tới orchestrator nên không chặn ai):** so `rf_final` vs `xgb_final`
+CÙNG grid rộng CÙNG 30 đặc trưng, `xgb_final` thắng mọi chỉ số test (xem
+reports/rf_final/BAO_CAO_RF_FINAL.md mục 2) → **XGBoost là mô hình sản xuất
+của Lớp B**, thay Random Forest trong `CLAUDE.md`/`docs/interface_contract.md`.
+RF vẫn train + báo cáo song song làm đối chiếu/phương án dự phòng (importance
+RF dễ diễn giải hơn cho phần viết báo cáo).
 """
 
 from __future__ import annotations
@@ -68,6 +76,15 @@ XGB_GRID_QUICK = {
     "max_depth": [4, 6],
     "learning_rate": [0.1, 0.3],
     "subsample": [0.8, 1.0],
+}
+# Grid XGBoost rộng (192 cấu hình) — dùng khi `--full`, tương đương tinh thần
+# PARAM_GRID_FULL của RF (Tuần 4: chạy --full cho RF nhưng bỏ sót XGBoost —
+# vá lại ở đây để cả 2 mô hình được so sánh công bằng trên cùng độ rộng grid).
+XGB_GRID_FULL = {
+    "n_estimators": [200, 400, 600, 800],
+    "max_depth": [3, 4, 6, 8],
+    "learning_rate": [0.03, 0.1, 0.2, 0.3],
+    "subsample": [0.7, 0.85, 1.0],
 }
 
 
@@ -135,6 +152,7 @@ def run(full_grid: bool = False, out_dir: Path = OUT_DIR) -> dict:
     print(f"Train {len(X_tr)} / Test {len(X_te)}")
 
     rf_grid = PARAM_GRID_FULL if full_grid else PARAM_GRID_QUICK
+    xgb_grid = XGB_GRID_FULL if full_grid else XGB_GRID_QUICK
     results: dict[str, dict] = {}
     importances: dict[str, pd.Series] = {}
 
@@ -166,7 +184,7 @@ def run(full_grid: bool = False, out_dir: Path = OUT_DIR) -> dict:
         xgb = XGBClassifier(tree_method="hist", eval_metric="logloss",
                             random_state=RANDOM_STATE, n_jobs=-1)
         info, xgb_final, imp = _train_one(
-            "xgb_final", xgb, XGB_GRID_QUICK, MODEL_FEATURES_FINAL,
+            "xgb_final", xgb, xgb_grid, MODEL_FEATURES_FINAL,
             X_tr, X_te, y_tr, y_te)
         results["xgb_final"], importances["xgb_final"] = info, imp
         dump({"model": xgb_final, "features": list(MODEL_FEATURES_FINAL),
@@ -213,6 +231,7 @@ def run(full_grid: bool = False, out_dir: Path = OUT_DIR) -> dict:
         "dac_trung_ngoai_bo_o_fast": [f for f in MODEL_FEATURES_FINAL
                                       if f in set(EXTERNAL_FEATURES)],
         "grid_rf": "full" if full_grid else "quick",
+        "grid_xgb": "full" if full_grid else "quick",
         "ket_qua": results,
         "bang_so_sanh": cmp_rows,
     }
@@ -262,6 +281,7 @@ def _plots(rf_final, rf_fast, X_te, y_te, imp_final: pd.Series,
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--full", action="store_true", help="grid RF rộng hơn (lâu hơn)")
+    ap.add_argument("--full", action="store_true",
+                    help="grid rộng hơn cho CẢ RF lẫn XGBoost (lâu hơn)")
     args = ap.parse_args()
     run(full_grid=args.full)

@@ -162,10 +162,15 @@ class CheckUrlResponse(TypedDict):
     verdict: Verdict
     zone: Zone
     risk_score: float             # điểm rủi ro tổng hợp [0, 1]
-    rf_score: float               # xác suất phishing từ Random Forest [0, 1]
+    clf_score: float              # xác suất phishing từ mô hình Lớp B [0, 1] —
+                                   # HIỆN LÀ XGBoost (chốt 2026-09-13, xem
+                                   # docs/interface_contract.md mục "Quyết định mô
+                                   # hình"), không phải Random Forest — tên trường
+                                   # cố tình trung lập theo thuật toán để không phải
+                                   # đổi contract nếu đổi mô hình lần nữa.
     override_flags: list[OverrideResult]
     explanation: str
-    source: Literal["blocklist", "rf_override", "ollama", "cache", "fallback"]
+    source: Literal["blocklist", "clf_override", "ollama", "cache", "fallback"]
     cached: bool
     latency_ms: float
 
@@ -176,16 +181,16 @@ class CheckUrlResponse(TypedDict):
 #    95% Tranco / 5% phishing ở tuần 6 (mục 3 Plan.md, mục 6 GhiChú).
 # ---------------------------------------------------------------------------
 
-RF_LOW_RISK_THRESHOLD_DEFAULT = 0.30
+CLF_LOW_RISK_THRESHOLD_DEFAULT = 0.30
 
 
-def phan_vung(rf_score: float, override_flags: list[OverrideResult],
-              rf_threshold: float = RF_LOW_RISK_THRESHOLD_DEFAULT) -> Zone:
-    """RF điểm thấp VÀ 0 cờ Override vi phạm -> Vùng thấp; còn lại -> Vùng nghi ngờ.
+def phan_vung(clf_score: float, override_flags: list[OverrideResult],
+              clf_threshold: float = CLF_LOW_RISK_THRESHOLD_DEFAULT) -> Zone:
+    """Điểm mô hình Lớp B thấp VÀ 0 cờ Override vi phạm -> Vùng thấp; còn lại -> Vùng nghi ngờ.
 
     "unknown" của Override KHÔNG tính là an toàn: chỉ ``flag is False`` mới cho qua.
     """
     co_vi_pham = any(o["flag"] is not False for o in override_flags)
-    if rf_score < rf_threshold and not co_vi_pham:
+    if clf_score < clf_threshold and not co_vi_pham:
         return "vung_thap"
     return "vung_nghi_ngo"

@@ -1,7 +1,7 @@
-"""Kiểm danh sách thương hiệu VN (dataset/brands/vn_brand_domains.csv) + loader.
+"""Kiểm danh sách thương hiệu VN (Dataset/brands/vn_brand_domains.csv) + loader.
 
 Chỉ kiểm CẤU TRÚC + công thức ngưỡng — không xác minh domain có thật/đang sống
-(việc rà tay theo cột `verified`, xem dataset/brands/README.md).
+(việc rà tay theo cột `verified`, xem Dataset/brands/README.md).
 """
 
 from src.override.brands import (

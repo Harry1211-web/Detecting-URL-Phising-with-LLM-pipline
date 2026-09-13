@@ -12,8 +12,11 @@
   Cyber**.
 
 Repo hiện chỉ có `GhiChu_Pipeline_DeTai.docx` (nguồn chân lý kiến trúc) + `Dataset/train/dataset_phishing.csv`.
-Bắt đầu từ số 0. Kiến trúc: Lớp A (DNR blocklist) → Lớp B (RF + 3 Override song song) → Vùng nghi ngờ
-(Ollama + RAG 2 tầng) → Backend API `/check-url` → Browser Extension.
+Bắt đầu từ số 0. Kiến trúc: Lớp A (DNR blocklist) → Lớp B (mô hình phân loại + 3 Override song song)
+→ Vùng nghi ngờ (Ollama + RAG 2 tầng) → Backend API `/check-url` → Browser Extension.
+*(Cập nhật 2026-09-13: mô hình Lớp B chốt là **XGBoost**, thay Random Forest ban đầu — cùng grid rộng
+XGBoost thắng mọi chỉ số test; xem `CLAUDE.md` + `docs/interface_contract.md` mục 0. RF vẫn train +
+báo cáo song song làm đối chiếu.)*
 
 Mục tiêu kế hoạch: hai người chạy **song song từ tuần 1**, không chặn nhau tới mốc tích hợp tuần 5,
 và có quy tắc **hoán đổi việc** khi một bên chậm.
@@ -105,8 +108,8 @@ Ký hiệu: **[A]** = Bạn A (CNPM), **[B]** = Bạn B (KHMT/Cyber), **[J]** = 
   `max(1, len(brand)//5)`). Unit test cả 3 Override. Hàm phân vùng 2 vùng.
 
 ### Tuần 5 — Tích hợp lần 1
-- **[J]** Cắm RF thật + Override thật + Ollama thật vào orchestrator sau `/check-url`. Test end-to-end
-  trên tập URL đã biết nhãn.
+- **[J]** Cắm mô hình Lớp B thật (**XGBoost**, `models/xgb_final.joblib` — chốt 2026-09-13) + Override
+  thật + Ollama thật vào orchestrator sau `/check-url`. Test end-to-end trên tập URL đã biết nhãn.
 - **[A]** Extension Lớp B: `webNavigation.onBeforeNavigate` → gọi backend → UI chặn/cảnh báo. Lớp A:
   nạp ruleset DNR từ output job blocklist.
 - **[B]** Nạp kho RAG Tầng 2 (văn bản Chống Lừa Đảo/NCSC, **xác minh tay, không auto-crawl**). Chốt
@@ -140,7 +143,9 @@ Ký hiệu: **[A]** = Bạn A (CNPM), **[B]** = Bạn B (KHMT/Cyber), **[J]** = 
 
 ## 4. Điểm giao & hợp đồng interface (chốt tuần 1)
 
-- **`/check-url`**: `POST {url}` → `{url, verdict, zone, risk_score, rf_score, override_flags[], explanation, source, cached, latency_ms}`.
+- **`/check-url`**: `POST {url}` → `{url, verdict, zone, risk_score, clf_score, override_flags[], explanation, source, cached, latency_ms}`.
+  (`rf_score` đổi tên thành `clf_score` 2026-09-13 khi chốt mô hình Lớp B là XGBoost — tên trung lập
+  theo thuật toán, xem `docs/interface_contract.md` mục 0.)
 - **Vector đặc trưng**: dict `{feature_name: value}` đúng tên cột dataset; service trích đặc trưng và
   training dùng **chung** danh sách tên + thứ tự.
 - **Kết quả mỗi Override**: `{name, flag: bool|"unknown", reason: str, latency_ms}`.

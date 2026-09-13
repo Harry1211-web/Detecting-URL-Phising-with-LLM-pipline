@@ -2,7 +2,7 @@
 điểm 2: *"Levenshtein Distance so với danh sách domain thương hiệu VN"*).
 
 So **nhãn domain** của URL đang xét với từng ``nhan`` trong
-``dataset/brands/vn_brand_domains.csv`` (loader ở ``brands.py``). Không chạm mạng —
+``Dataset/brands/vn_brand_domains.csv`` (loader ở ``brands.py``). Không chạm mạng —
 thuần tính toán, nên **không bao giờ trả "unknown"** (khớp docs/interface_contract.md §2).
 
 Ngưỡng Levenshtein: quy tắc **theo độ dài** của PhishMatch (arXiv:2112.02226) —
