@@ -77,13 +77,15 @@ XGB_GRID_QUICK = {
     "learning_rate": [0.1, 0.3],
     "subsample": [0.8, 1.0],
 }
-# Grid XGBoost rộng (192 cấu hình) — dùng khi `--full`, tương đương tinh thần
-# PARAM_GRID_FULL của RF (Tuần 4: chạy --full cho RF nhưng bỏ sót XGBoost —
-# vá lại ở đây để cả 2 mô hình được so sánh công bằng trên cùng độ rộng grid).
+# Grid XGBoost rộng (432 cấu hình) — dùng khi `--full`, tương đương tinh thần
+# PARAM_GRID_FULL của RF. n_estimators/learning_rate nới thêm 2026-09-14 vì bản
+# 192-cấu-hình trước đó chọn cấu hình tốt nhất chạm biên ở cả 2 tham số này
+# (n_estimators=800 = biên trên, learning_rate=0.03 = biên dưới) — không kết
+# luận được liệu nới grid có đổi kết quả hay không cho tới khi thử.
 XGB_GRID_FULL = {
-    "n_estimators": [200, 400, 600, 800],
+    "n_estimators": [200, 400, 600, 800, 1000, 1200],
     "max_depth": [3, 4, 6, 8],
-    "learning_rate": [0.03, 0.1, 0.2, 0.3],
+    "learning_rate": [0.01, 0.02, 0.03, 0.1, 0.2, 0.3],
     "subsample": [0.7, 0.85, 1.0],
 }
 
@@ -279,9 +281,65 @@ def _plots(rf_final, rf_fast, X_te, y_te, imp_final: pd.Series,
     plt.close(fig)
 
 
+def run_xgb_only(grid: dict = XGB_GRID_FULL, out_dir: Path = OUT_DIR) -> dict:
+    """Train lại CHỈ `xgb_final` với `grid`, giữ nguyên rf_v1/rf_final/rf_fast đã
+    có trong `summary.json` — tránh mất ~15-20 phút train lại RF không cần thiết
+    khi chỉ mở rộng grid XGBoost. Cập nhật summary.json + so_sanh_mo_hinh.csv +
+    importances_xgb_final.csv + models/xgb_final.joblib tại chỗ.
+    """
+    summary_path = out_dir / "summary.json"
+    if not summary_path.exists():
+        raise FileNotFoundError(
+            f"{summary_path} chưa tồn tại — chạy `python -m src.train_rf_final --full` "
+            "trước để có rf_final/rf_fast/rf_v1 làm nền.")
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+
+    MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    df = load_dataset()
+    X, y = build_xy(df)
+    X_tr, X_te, y_tr, y_te = train_test_split(
+        X, y, test_size=TEST_SIZE, stratify=y, random_state=RANDOM_STATE)
+
+    from xgboost import XGBClassifier
+    xgb = XGBClassifier(tree_method="hist", eval_metric="logloss",
+                        random_state=RANDOM_STATE, n_jobs=-1)
+    info, xgb_final, imp = _train_one(
+        "xgb_final", xgb, grid, MODEL_FEATURES_FINAL, X_tr, X_te, y_tr, y_te)
+    dump({"model": xgb_final, "features": list(MODEL_FEATURES_FINAL),
+          "label_map": LABEL_MAP, "trained_at": time.strftime("%Y-%m-%d %H:%M"),
+          "cv_roc_auc": info["kfold_mean_std"]["roc_auc"]},
+         MODELS_DIR / "xgb_final.joblib")
+    imp.rename_axis("dac_trung").rename("importance").to_csv(
+        out_dir / "importances_xgb_final.csv", encoding="utf-8-sig")
+
+    summary["ket_qua"]["xgb_final"] = info
+    summary["grid_xgb"] = "full"
+    for row in summary["bang_so_sanh"]:
+        if row["mo_hinh"] == "xgb_final":
+            row.update({
+                "kfold_roc_auc": info["kfold_mean_std"]["roc_auc"]["mean"],
+                "kfold_f1": info["kfold_mean_std"]["f1"]["mean"],
+                "test_roc_auc": info["test_metrics"]["roc_auc"],
+                "test_f1_phishing": info["test_metrics"]["f1_phishing"],
+                "test_accuracy": info["test_metrics"]["accuracy"],
+            })
+    summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    pd.DataFrame(summary["bang_so_sanh"]).to_csv(
+        out_dir / "so_sanh_mo_hinh.csv", index=False, encoding="utf-8-sig")
+
+    print(f"\n{pd.DataFrame(summary['bang_so_sanh']).to_string(index=False)}")
+    return info
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--full", action="store_true",
                     help="grid rộng hơn cho CẢ RF lẫn XGBoost (lâu hơn)")
+    ap.add_argument("--xgb-only", action="store_true",
+                    help="chỉ train lại xgb_final với XGB_GRID_FULL, giữ nguyên "
+                         "rf_final/rf_fast/rf_v1 đã có trong summary.json (nhanh hơn)")
     args = ap.parse_args()
-    run(full_grid=args.full)
+    if args.xgb_only:
+        run_xgb_only()
+    else:
+        run(full_grid=args.full)

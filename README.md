@@ -107,8 +107,8 @@ Chi tiết: `Plan.md` mục 3.
   0,9924 / test accuracy 0,9545 — chi phí ~0,7 điểm so với 81 đặc trưng. `n_estimators=400`
   nay là giá trị **giữa** grid `{200,400,600}` (trước ở biên grid rút gọn) — điểm số gần như
   không đổi so với grid rút gọn → xác nhận không phải do grid hẹp.
-- **XGBoost (30 đặc trưng, grid rộng 192 cấu hình, xác nhận 2026-09-13)**: k-fold ROC-AUC
-  **0,9943**, test ROC-AUC 0,9922 / accuracy **0,9650** / F1 0,9651 — thắng RF ở MỌI chỉ số
+- **XGBoost (30 đặc trưng, grid rộng 432 cấu hình, xác nhận 2026-09-14)**: k-fold ROC-AUC
+  **0,9944**, test ROC-AUC 0,9922 / accuracy **0,9650** / F1 0,9651 — thắng RF ở MỌI chỉ số
   test, train nhanh hơn RF ~5×. **→ CHỐT XGBoost làm mô hình sản xuất Lớp B** (thay Random
   Forest thiết kế ban đầu — xem `docs/interface_contract.md` mục 0). RF vẫn train + báo cáo
   song song làm đối chiếu/phương án dự phòng.
@@ -184,9 +184,10 @@ Chi tiết: `Plan.md` mục 3.
 `docs/interface_contract.md` (đã đổi từ "bản thảo chờ A rà" sang "chốt, A triển khai theo").
 
 - **XGBoost thay Random Forest làm mô hình sản xuất Lớp B.** Chạy `--full` cho CẢ 2 mô hình (trước
-  đó `--full` chỉ áp cho RF — đã vá `XGB_GRID_FULL`, 192 cấu hình): `xgb_final` thắng `rf_final`
-  mọi chỉ số test (k-fold ROC-AUC 0,9943 vs 0,9924; test accuracy 0,9650 vs 0,9545). RF vẫn train +
-  báo cáo song song. Chi tiết: `reports/rf_final/BAO_CAO_RF_FINAL.md`.
+  đó `--full` chỉ áp cho RF — đã vá `XGB_GRID_FULL`), sau mở rộng riêng grid XGBoost thêm lần nữa
+  (192 → 432 cấu hình, `--xgb-only`, 2026-09-14, đóng nốt 2 tham số còn chạm biên): `xgb_final`
+  thắng `rf_final` mọi chỉ số test (k-fold ROC-AUC 0,9944 vs 0,9924; test accuracy 0,9650 vs
+  0,9545). RF vẫn train + báo cáo song song. Chi tiết: `reports/rf_final/BAO_CAO_RF_FINAL.md`.
 - **Đổi tên trường contract theo mô hình mới**: `rf_score`→`clf_score`, `RF_LOW_RISK_THRESHOLD_DEFAULT`
   →`CLF_LOW_RISK_THRESHOLD_DEFAULT`, `source: "rf_override"`→`"clf_override"` — tên trung lập theo
   thuật toán, không phải đổi contract nếu đổi mô hình lần nữa. Cập nhật `src/contracts.py`,

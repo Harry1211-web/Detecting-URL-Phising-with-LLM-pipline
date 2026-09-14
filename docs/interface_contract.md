@@ -21,7 +21,7 @@ So `rf_final` vs `xgb_final` CÙNG grid rộng (`GridSearchCV`, k=5, `--full`), 
 | Mô hình | k-fold ROC-AUC | test ROC-AUC | test accuracy | test F1 (phishing) |
 |---|---|---|---|---|
 | `rf_final` (grid rộng) | 0,9924 | 0,9914 | 0,9545 | 0,9547 |
-| **`xgb_final` (grid rộng, 192 cấu hình)** | **0,9943** | **0,9922** | **0,9650** | **0,9651** |
+| **`xgb_final` (grid rộng, 432 cấu hình)** | **0,9944** | **0,9922** | **0,9650** | **0,9651** |
 
 Chi tiết + cấu hình tốt nhất: `reports/rf_final/BAO_CAO_RF_FINAL.md` mục 2.
 RF vẫn được train + báo cáo song song (đối chiếu/phương án dự phòng, importance dễ

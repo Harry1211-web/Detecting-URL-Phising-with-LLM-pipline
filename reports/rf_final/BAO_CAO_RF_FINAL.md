@@ -47,27 +47,29 @@ File máy đọc: `reports/rf_final/selected_features.json`.
 
 ## 2. Ba mô hình trên cùng split + cùng GridSearchCV k-fold (k=5)
 
-**Đã chạy `--full` cho CẢ RF lẫn XGBoost (2026-09-13 — trước đó `--full` chỉ áp
-cho RF, XGBoost vẫn dùng grid rút gọn; đã vá `XGB_GRID_FULL` 192 cấu hình trong
-`src/train_rf_final.py`). Bảng dưới là số liệu CHỐT.**
+**Đã chạy `--full` cho CẢ RF lẫn XGBoost (2026-09-13), rồi mở rộng thêm riêng
+grid XGBoost (2026-09-14 — `XGB_GRID_FULL` 192 → 432 cấu hình, `n_estimators`
+tới 1200, `learning_rate` tới 0,01, qua `python -m src.train_rf_final --xgb-only`).
+Bảng dưới là số liệu CHỐT.**
 
 | Mô hình | n đặc trưng | k-fold ROC-AUC | k-fold F1 | test ROC-AUC | test F1 (phishing) | test accuracy | thời gian |
 |---|---|---|---|---|---|---|---|
 | `rf_v1` (tham chiếu) | 81 | 0,9935 | 0,9666 | 0,9924 | 0,9612 | 0,9611 | ~105s |
 | `rf_final` | 30 | 0,9924 | 0,9633 | 0,9914 | 0,9547 | 0,9545 | ~500-1000s |
 | `rf_fast` | 25 | 0,9772 | 0,9255 | 0,9763 | 0,9292 | 0,9296 | ~400-800s |
-| **`xgb_final` — CHỐT SẢN XUẤT** | **30** | **0,9943** | **0,9694** | **0,9922** | **0,9651** | **0,9650** | 229,3s |
+| **`xgb_final` — CHỐT SẢN XUẤT** | **30** | **0,9944** | **0,9694** | **0,9922** | **0,9651** | **0,9650** | 516,6s |
 
 Cấu hình tốt nhất (grid rộng — `PARAM_GRID_FULL` cho RF trong `src/train_rf.py`,
 `XGB_GRID_FULL` cho XGBoost trong `src/train_rf_final.py`):
 - `rf_final`: `n_estimators=400, max_depth=20, min_samples_leaf=1, max_features='sqrt'`.
 - `rf_fast`: `n_estimators=600, max_depth=None, min_samples_leaf=1, max_features='sqrt'`.
-- `xgb_final`: `n_estimators=800, max_depth=6, learning_rate=0.03, subsample=0.85`.
-  `n_estimators` (biên trên `{200,400,600,800}`) và `learning_rate` (biên dưới
-  `{0.03,0.1,0.2,0.3}`) đều ở biên grid — cặp "learning_rate nhỏ + nhiều cây" còn
-  room cải thiện thêm nếu nới grid xa hơn (n_estimators>800, learning_rate<0.03);
-  ghi nhận, không ưu tiên chạy tiếp vì chênh lệch đã rất nhỏ so với chi phí grid
-  lớn hơn nhiều.
+- `xgb_final`: `n_estimators=1200, max_depth=6, learning_rate=0.03, subsample=0.85`.
+  So với grid 192-cấu-hình trước: `learning_rate=0,03` nay là điểm **giữa**
+  `{0.01,0.02,0.03,0.1,0.2,0.3}` (hết ở biên) — xác nhận là tối ưu thật, không do
+  grid hẹp. `n_estimators` vẫn ở biên trên `{200,...,1200}`, nhưng điểm số hầu
+  như không đổi so với `n_estimators=800` trước đó (k-fold ROC-AUC 0,9943→0,9944,
+  test accuracy/F1 không đổi) → đường cong đã bão hoà (thêm cây gần như không
+  còn tác dụng); không tiếp tục nới grid vì lợi ích biên gần như bằng 0.
 
 Biểu đồ: `fig_so_sanh_mo_hinh.png`, `fig_final_vs_fast_roc.png`, `fig_final_importances.png`.
 Model đã lưu: `models/rf_final.joblib`, `models/rf_fast.joblib`, `models/xgb_final.joblib`.
@@ -85,8 +87,8 @@ xem 2.2.)
 
 Cùng grid rộng, cùng 30 đặc trưng, cùng split — `xgb_final` thắng `rf_final` **ở
 MỌI chỉ số test**: ROC-AUC +0,0008, accuracy **+1,05 điểm**, F1 phishing +1,04
-điểm; train nhanh hơn RF final ~2-4 lần (229s vs 500-1000s) dù grid XGBoost rộng
-hơn về SỐ cấu hình (192 vs 108) — XGBoost train từng cây nhanh hơn RF nhiều.
+điểm; train nhanh hơn RF final dù grid XGBoost rộng hơn nhiều về SỐ cấu hình
+(432 vs 108) — XGBoost train từng cây nhanh hơn RF nhiều.
 `xgb_final` cũng vượt cả `rf_v1` (81 đặc trưng, mốc tham chiếu) dù chỉ dùng 30 →
 XGBoost không phải đánh đổi độ chính xác lấy tốc độ như RF.
 
@@ -150,10 +152,11 @@ Test offline (không chạm mạng, monkeypatch 2 hàm tra cứu): `tests/test_d
 
 1. ~~Grid vẫn rút gọn, cấu hình RF tốt nhất chạm biên.~~ **Đã chạy `--full` (2026-09-11)**
    — xem mục 2: `rf_final`/`rf_fast` không còn ở biên grid, điểm số ổn định.
-   ~~Còn nợ: `XGB_GRID_QUICK` chưa mở rộng.~~ **Đã vá + chạy `XGB_GRID_FULL` (2026-09-13)**
-   — 192 cấu hình, `xgb_final` thắng mọi chỉ số → **chốt XGBoost làm mô hình sản
-   xuất** (mục 2.2). Còn nợ nhỏ: `n_estimators`/`learning_rate` vẫn ở biên grid
-   rộng (xem mục 2) — không ưu tiên nới thêm vì chênh lệch đã rất nhỏ.
+   ~~Còn nợ: `XGB_GRID_QUICK` chưa mở rộng.~~ **Đã vá + chạy `XGB_GRID_FULL` (2026-09-13,
+   mở rộng thêm 2026-09-14 lên 432 cấu hình)** — `xgb_final` thắng mọi chỉ số →
+   **chốt XGBoost làm mô hình sản xuất** (mục 2.2). `learning_rate` đã xác nhận
+   là điểm giữa grid (không còn ở biên); `n_estimators` vẫn ở biên trên nhưng
+   điểm số bão hoà (0,9943→0,9944, không đổi ở test) — không ưu tiên nới thêm.
 2. **`domain_age == -1` (15,6% dòng, EDA Tuần 1) vẫn coi là số −1.** Khi Bạn A ghép
    feature vào service, thêm cờ nhị phân `domain_age_unknown` để tách "domain non"
    khỏi "không tra được" — hiện RF gộp chung.
