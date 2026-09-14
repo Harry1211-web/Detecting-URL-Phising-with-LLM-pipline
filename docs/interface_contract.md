@@ -99,7 +99,7 @@ hình lần nữa; tương tự `RF_LOW_RISK_THRESHOLD_DEFAULT` → `CLF_LOW_RIS
 mới coi là "không vi phạm" khi phân vùng. Áp dụng cho:
 - `domain_age`: RDAP (IANA bootstrap) → WHOIS fallback; cả 2 rỗng/timeout → `"unknown"`.
   `.vn` không có RDAP → luôn xuống WHOIS (không phải bug). Ngưỡng "domain non"
-  **900 ngày** (hiệu chỉnh bằng Precision/Recall + F-beta trên tập train, xem
+  **4.005 ngày** (hiệu chỉnh bằng đường cong ROC + Youden's J trên tập train, xem
   `src/threshold_domain_age.py` + `reports/domain_age_threshold/`; vẫn là ngưỡng
   khởi động, hiệu chỉnh lại Tuần 6 trên traffic mô phỏng thực tế).
 - `ssl_tls`: không đọc được / bị chặn SSRF → `"unknown"`; chứng chỉ cấp < 2 ngày

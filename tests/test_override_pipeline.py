@@ -16,7 +16,7 @@ def _truoc(days: int) -> datetime:
 
 def _mock_mang_sach(monkeypatch):
     """Domain 'cũ' + cert hợp lệ lâu năm → cả 3 Override đều 'ổn' cho domain lạ."""
-    monkeypatch.setattr(da, "_rdap_ngay_dang_ky", lambda d: _truoc(2000))
+    monkeypatch.setattr(da, "_rdap_ngay_dang_ky", lambda d: _truoc(8000))
     monkeypatch.setattr(da, "_whois_ngay_dang_ky", lambda d: None)
     monkeypatch.setattr(st, "_lay_thong_tin_cert",
                         lambda h, p=443: {"trang_thai": "hop_le", "not_before": _truoc(500),

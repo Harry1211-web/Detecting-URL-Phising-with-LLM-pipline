@@ -18,7 +18,7 @@ src/train_rf.py                      # train Random Forest v1 — 81 đặc trư
 src/feature_selection.py             # cắt 81 -> 30 đặc trưng, xác nhận bằng ROC-AUC 5-fold (Tuần 3)
 src/train_rf_final.py                # RF cuối (30) + bản "chỉ đặc trưng nhanh" (25) + XGBoost (Tuần 3;
                                      #   --full mở rộng grid CẢ 2 mô hình từ 2026-09-13) — XGBoost CHỐT làm mô hình sản xuất
-src/threshold_domain_age.py          # hiệu chỉnh ngưỡng domain_age bằng Precision/Recall + F-beta (2026-09-13)
+src/threshold_domain_age.py          # hiệu chỉnh ngưỡng domain_age bằng ROC + Youden's J
 src/features/                        # trích 87 đặc trưng — README + trial_extract.py + hannousse_yahiouche/ (script gốc vendored)
 Dataset/brands/                      # vn_brand_domains.csv (63 brand VN, cột verified) + brands.csv (86 brand quốc tế, Zenodo) + README
 src/override/                        # 3 luật Override + aggregator + phân vùng; brands.py nạp Dataset/brands/vn_brand_domains.csv
@@ -151,9 +151,9 @@ Chi tiết: `Plan.md` mục 3.
   `contracts.phan_vung` (tiện test/tích hợp — orchestrator sản xuất là việc Bạn A, chạy 3 luật
   **song song** với mô hình Lớp B).
 - **Test**: offline, monkeypatch mọi bước chạm mạng. Tổng repo **53 test**, `pytest -q` xanh.
-- Ngưỡng `NGUONG_CERT_MOI_NGAY=2`, `CLF_LOW_RISK_THRESHOLD_DEFAULT=0.30`, `NGUONG_TUOI_MOI_NGAY=900`
-  (đổi từ 90, xem "Ghi chú hiệu chỉnh domain_age" dưới) là **mặc định khởi động** — hiệu chỉnh
-  lại Tuần 6 trên traffic mô phỏng 95% Tranco / 5% phishing.
+- Ngưỡng `NGUONG_CERT_MOI_NGAY=2`, `CLF_LOW_RISK_THRESHOLD_DEFAULT=0.30`, `NGUONG_TUOI_MOI_NGAY=4005`
+  (hiệu chỉnh bằng ROC + Youden's J, xem mục "chốt mô hình Lớp B" dưới) là **mặc định khởi động**
+  — hiệu chỉnh lại Tuần 6 trên traffic mô phỏng 95% Tranco / 5% phishing.
 
 ## Ghi chú rà brand VN + đổi thuật toán typosquatting (2026-09-10, Bạn B)
 
@@ -191,15 +191,12 @@ Chi tiết: `Plan.md` mục 3.
   →`CLF_LOW_RISK_THRESHOLD_DEFAULT`, `source: "rf_override"`→`"clf_override"` — tên trung lập theo
   thuật toán, không phải đổi contract nếu đổi mô hình lần nữa. Cập nhật `src/contracts.py`,
   `src/override/__init__.py`, test liên quan; 53 test vẫn xanh.
-- **Hiệu chỉnh ngưỡng `domain_age` bằng Precision/Recall + F-beta** (`src/threshold_domain_age.py`,
+- **Hiệu chỉnh ngưỡng `domain_age` bằng đường cong ROC + Youden's J** (`src/threshold_domain_age.py`,
   `reports/domain_age_threshold/`) thay vì chọn số ngày tuỳ ý:
-  - Yêu cầu đặt ra: Recall ≥ 95% (không bỏ lọt phishing); trong các ngưỡng đạt, chọn Precision cao
-    nhất. **Kết quả: BẤT KHẢ THI** bằng riêng domain_age — Recall chỉ chạm 95% khi ngưỡng vượt
-    ~9.500 ngày (~26 năm), lúc đó Precision rơi về ~50% (ngang ngẫu nhiên) — khớp trực tiếp giới hạn
-    CAIDA/WEIS đã ghi trong `domain_age.py` (domain bị chiếm/lâu năm không thể bắt bằng tuổi domain).
-  - Dùng tầng dự phòng: Precision ≥ 95% (ngang mức tin cậy ngưỡng 90 ngày cũ), tối đa Recall →
-    **900 ngày** (Precision 0,9509, Recall 0,1970) so với 90 ngày cũ (Precision 0,9569, Recall
-    **0,0470**) — cùng mức tin cậy, bắt phishing nhiều gấp **~4,2 lần**. `NGUONG_TUOI_MOI_NGAY`
-    trong `domain_age.py` đã đổi 90 → 900.
+  - Quét toàn bộ tập train (loại dòng `domain_age` âm), tính Sensitivity/Specificity của luật
+    "non ⇔ tuổi < T" tại mọi T — đường cong (FPR, TPR) chính là ROC của riêng đặc trưng `domain_age`
+    (AUC ≈ 0,735). Chọn T tối đa hoá **Youden's J = Sensitivity + Specificity − 1**.
+  - Kết quả: **`NGUONG_TUOI_MOI_NGAY` = 4.005 ngày** (Sensitivity 0,5994, Specificity 0,7668,
+    J 0,3663, Precision 0,7136 tại điểm này).
   - **Vẫn là ngưỡng khởi động** (hiệu chỉnh trên tập TRAIN cân bằng 50/50) — hiệu chỉnh lại Tuần 6
     trên traffic mô phỏng thực tế, giống ngưỡng phân vùng.

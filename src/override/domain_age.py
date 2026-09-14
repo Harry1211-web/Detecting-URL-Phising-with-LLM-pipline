@@ -16,27 +16,21 @@ Cờ (flag) trả về:
   False    — lấy được tuổi và tuổi >= ngưỡng
   "unknown"— không xác định được ngày đăng ký từ cả RDAP lẫn WHOIS
 
-Ngưỡng NGUONG_TUOI_MOI_NGAY — hiệu chỉnh bằng Precision/Recall + F-beta thay vì
-chọn tuỳ ý (2026-09-13, `src/threshold_domain_age.py`, xem
-`reports/domain_age_threshold/`):
-  - Yêu cầu nghiệp vụ đặt ra: Recall >= 95% (không được bỏ lọt quá nhiều
-    phishing). Quét toàn bộ `Dataset/train/dataset_phishing.csv` (loại dòng
-    domain_age âm) cho thấy **yêu cầu này BẤT KHẢ THI** bằng riêng domain_age —
-    Recall chỉ chạm ~95% khi ngưỡng vượt ~9.500 ngày (~26 năm), lúc đó Precision
-    rơi về ~50% (ngang ngẫu nhiên trên tập cân bằng) vì gần như MỌI domain (kể cả
-    hợp pháp lâu năm) đều bị coi "non". Đây là bằng chứng thực nghiệm trực tiếp
-    cho giới hạn cấu trúc CAIDA/WEIS đã ghi dưới đây — không phải do chọn sai số.
-  - Dùng tầng dự phòng: trong các ngưỡng đạt **Precision >= 95%** (mức tin cậy
-    ngang với "90 ngày" cũ), chọn ngưỡng cho **Recall lớn nhất** → **900 ngày**
-    (Precision 0,9509, Recall 0,1970, F2 0,2341) — so với 90 ngày cũ (Precision
-    0,9569, Recall **0,0470**): cùng mức tin cậy, bắt được phishing nhiều gấp
-    **~4,2 lần**.
-  - `F_BETA=2` (coi Recall quan trọng gấp đôi Precision) dùng để BÁO CÁO/đối
-    chiếu đường cong — KHÔNG dùng để chọn trực tiếp: tối ưu F-beta thuần trên dữ
-    liệu này cũng suy biến về ngưỡng cực lớn (Precision ~71%, xem script).
+Ngưỡng NGUONG_TUOI_MOI_NGAY — hiệu chỉnh bằng đường cong ROC + chỉ số Youden's J
+thay vì chọn tuỳ ý (`src/threshold_domain_age.py`, xem `reports/domain_age_threshold/`):
+  - Quét toàn bộ `Dataset/train/dataset_phishing.csv` (loại dòng domain_age âm —
+    sentinel + lỗi tính ngày), tính Sensitivity (Recall) và Specificity của luật
+    "non ⇔ tuổi < T" tại mọi ngưỡng T, coi đó là đường cong ROC của riêng đặc
+    trưng domain_age (AUC ≈ 0,735).
+  - **Youden's J(T) = Sensitivity(T) + Specificity(T) − 1** — điểm trên đường
+    cong ROC xa đường chéo ngẫu nhiên nhất, cân bằng giữa bắt đúng phishing và
+    không báo nhầm domain hợp pháp. Ngưỡng chọn = T tối đa hoá J(T).
+  - Kết quả: **4.005 ngày** (Sensitivity 0,5994, Specificity 0,7668, J 0,3663,
+    Precision 0,7136 tại điểm này).
   - **VẪN LÀ NGƯỠNG KHỞI ĐỘNG** — hiệu chỉnh trên tập TRAIN cân bằng 50/50, phải
     hiệu chỉnh lại ở Tuần 6 trên traffic mô phỏng 95% Tranco / 5% phishing (Plan.md
-    mục 3 Tuần 6) vì Precision đo trên tập cân bằng luôn lạc quan hơn thực tế.
+    mục 3 Tuần 6) vì Precision/Specificity đo trên tập cân bằng luôn lạc quan
+    hơn thực tế (traffic thật >99% hợp pháp).
 
 **Giới hạn cấu trúc của luật này** (ghi vào Section "Limitations" của bài):
   - Chỉ hiệu quả với phishing dùng **domain đăng ký mới** — CAIDA/WEIS 2025 ước
@@ -75,8 +69,8 @@ IANA_BOOTSTRAP_URL = "https://data.iana.org/rdap/dns.json"
 BOOTSTRAP_TIMEOUT_S = 3.0  # tải 1 lần rồi cache (lru_cache) — không tính vào "~500ms/bước"
 RDAP_TIMEOUT_S = 0.5       # mỗi truy vấn RDAP theo domain
 WHOIS_TIMEOUT_S = 0.5      # mỗi truy vấn WHOIS cổng 43
-NGUONG_TUOI_MOI_NGAY = 900  # < 900 ngày = "domain non" — hiệu chỉnh P/R+F-beta 2026-09-13
-                            # (src/threshold_domain_age.py; xem docstring module)
+NGUONG_TUOI_MOI_NGAY = 4005  # < 4005 ngày = "domain non" — hiệu chỉnh ROC + Youden's J
+                             # (src/threshold_domain_age.py; xem docstring module)
 
 _HEADERS = {
     "User-Agent": "doan-cntt-phishing-detector/0.1 (Override#1 tuoi-domain)",

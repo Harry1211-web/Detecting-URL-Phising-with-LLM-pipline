@@ -40,7 +40,7 @@ def test_flag_true_khi_domain_non(monkeypatch):
 
 def test_flag_false_khi_domain_cu(monkeypatch):
     monkeypatch.setattr(da, "_rdap_ngay_dang_ky", lambda d: None)
-    monkeypatch.setattr(da, "_whois_ngay_dang_ky", lambda d: _ngay_truoc(5 * 365))
+    monkeypatch.setattr(da, "_whois_ngay_dang_ky", lambda d: _ngay_truoc(20 * 365))
     r = da.kiem_tra_tuoi_domain("https://cong-ty-lau-doi.vn")
     assert r["flag"] is False
     assert "WHOIS" in r["reason"]

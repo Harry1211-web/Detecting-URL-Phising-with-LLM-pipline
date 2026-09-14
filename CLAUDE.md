@@ -51,10 +51,10 @@ Pipeline khi người dùng click 1 URL:
    - **Luật Override** chạy song song với mô hình Lớp B (không phải gate riêng), 3 nhánh:
      - Tuổi domain: **RDAP trước, WHOIS fallback**, timeout ~500ms. Rỗng cả 2 → "không xác định",
        **không mặc định là an toàn**. `.vn` hiện chưa hỗ trợ RDAP (VNNIC chưa triển khai) → domain
-       Việt Nam luôn rơi xuống fallback WHOIS trên thực tế. Ngưỡng "domain non" **900 ngày** — hiệu
-       chỉnh bằng Precision/Recall + F-beta (β=2) trên tập train thay vì chọn tuỳ ý (yêu cầu Recall
-       ≥ 95% BẤT KHẢ THI bằng riêng luật này — xem `src/threshold_domain_age.py`; dùng tầng dự phòng
-       Precision ≥ 95%, tối đa Recall). Vẫn là ngưỡng khởi động, hiệu chỉnh lại Tuần 6.
+       Việt Nam luôn rơi xuống fallback WHOIS trên thực tế. Ngưỡng "domain non" **4.005 ngày** — hiệu
+       chỉnh bằng đường cong ROC + Youden's J trên tập train thay vì chọn tuỳ ý (T tối đa hoá
+       Sensitivity + Specificity − 1; AUC riêng đặc trưng domain_age ≈ 0,735 — xem
+       `src/threshold_domain_age.py`). Vẫn là ngưỡng khởi động, hiệu chỉnh lại Tuần 6.
      - SSL/TLS: chứng chỉ hợp lệ / cấp quá gần đây (< 2 ngày) là cờ đáng ngờ.
      - Typosquatting: **Levenshtein Distance** so với danh sách thương hiệu VN
        (`Dataset/brands/vn_brand_domains.csv`, 63 brand, cột `verified` rà tay theo SBV). Ngưỡng

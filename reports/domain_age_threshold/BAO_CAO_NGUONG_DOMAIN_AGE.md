@@ -1,7 +1,7 @@
-# Báo cáo hiệu chỉnh ngưỡng Override #1 (tuổi domain) — 2026-09-13 (Bạn B)
+# Báo cáo hiệu chỉnh ngưỡng Override #1 (tuổi domain) — Bạn B
 
-Thay thế "90 ngày" chọn tuỳ ý (Tuần 3) bằng ngưỡng có căn cứ dữ liệu, dùng
-Precision/Recall + F-beta (β>1). Tái tạo:
+Thay thế lựa chọn tuỳ ý bằng ngưỡng có căn cứ dữ liệu, dùng đường cong ROC +
+chỉ số Youden's J (Youden, 1950). Tái tạo:
 
 ```
 python -m src.threshold_domain_age    # -> reports/domain_age_threshold/
@@ -11,11 +11,7 @@ python -m src.threshold_domain_age    # -> reports/domain_age_threshold/
 
 ---
 
-## 1. Yêu cầu & phương pháp
-
-**Yêu cầu nghiệp vụ** (đặt ra 2026-09-13): luật `domain_age` không được bỏ lọt quá
-nhiều phishing — bắt buộc **Recall ≥ 95%**; trong số các ngưỡng đạt điều kiện đó,
-chọn ngưỡng cho **Precision cao nhất**.
+## 1. Dữ liệu & phương pháp
 
 **Dữ liệu**: `Dataset/train/dataset_phishing.csv` (cột `domain_age`, đơn vị ngày).
 Loại **1.837/11.430 dòng (16,07%)** có `domain_age` âm trước khi quét:
@@ -26,68 +22,68 @@ Loại **1.837/11.430 dòng (16,07%)** có `domain_age` âm trước khi quét:
 | `-2` | 55 | Lỗi tính ngày trong script gốc Hannousse & Yahiouche (WHOIS trả ngày sau ngày crawl) |
 | `-12` | 1 | Như trên |
 
-Còn lại **9.593 dòng** dùng để quét ngưỡng. Với mỗi ngưỡng nguyên T (1..3.650
-ngày = 10 năm), tính đúng vị từ luật thật (`domain_age.py`): **"non" ⇔ tuổi < T**.
+Còn lại **9.593 dòng** (4.721 phishing / 4.872 hợp pháp) dùng để quét ngưỡng.
 
-**Tiêu chí F-beta**: β = 2 (Recall quan trọng gấp đôi Precision — đúng yêu cầu
-"không bỏ lọt phishing"), chỉ dùng để **báo cáo/đối chiếu đường cong**, không dùng
-để chọn trực tiếp (lý do — mục 3).
+**Phương pháp — đường cong ROC + Youden's J:**
 
----
+Với mỗi ngưỡng nguyên T (1..13.000 ngày), tính đúng vị từ luật thật
+(`domain_age.py`): **"non" ⇔ tuổi < T**, rồi tính:
 
-## 2. Kết quả — Tầng 1 (đúng yêu cầu gốc) BẤT KHẢ THI
+- **Sensitivity(T)** = TP/(TP+FN) — đúng bằng Recall.
+- **Specificity(T)** = TN/(TN+FP).
+- **Youden's J(T) = Sensitivity(T) + Specificity(T) − 1 = TPR(T) − FPR(T)** —
+  khoảng cách (theo trục dọc) từ điểm (FPR(T), TPR(T)) trên đường cong ROC tới
+  đường chéo ngẫu nhiên.
 
-Không có ngưỡng T nào trong 1..3.650 ngày đạt Recall ≥ 95%. Recall chỉ chạm mức
-đó khi T vượt xa miền hữu ích:
+**Ngưỡng chọn = T tối đa hoá J(T)** trên toàn bộ khoảng quét. Đây là điểm cân
+bằng tốt nhất giữa bắt đúng phishing (Sensitivity) và không báo nhầm domain hợp
+pháp (Specificity), không thiên về 1 phía như đặt sàn Recall hay sàn Precision
+tuỳ ý.
 
-| T (ngày) | TP | FP | Precision | Recall | F2 |
-|---|---|---|---|---|---|
-| 30 | 132 | 0 | 1,000 | 0,028 | 0,035 |
-| 90 (mốc cũ) | 222 | 10 | **0,957** | 0,047 | 0,058 |
-| 365 | 565 | 31 | 0,948 | 0,120 | 0,145 |
-| 900 | 930 | 48 | 0,951 | 0,197 | 0,234 |
-| 1.825 | 1.488 | 248 | 0,857 | 0,315 | 0,361 |
-| 3.650 (biên quét) | 2.384 | 975 | 0,710 | 0,505 | 0,536 |
-| 10.000 (ngoài biên quét, tham khảo) | 4.721 | 4.726 | 0,500 | 1,000 | 0,833 |
-
-→ Recall chỉ đạt 100% khi T ≈ 10.000 ngày (~27 năm) — tại đó **Precision rơi về
-~50%, đúng bằng tỉ lệ nền của tập cân bằng 50/50** (tương đương đoán ngẫu nhiên).
-Tối ưu F2 thuần cũng suy biến về vùng ngưỡng cực lớn này (T≈3.641, Precision chỉ
-0,710) vì β=2 đủ lớn để "bắt hết bằng cách coi mọi domain là non" luôn thắng về
-điểm số — **cả tiêu chí gốc lẫn F-beta thuần đều không dùng được trực tiếp ở đây**.
-
-**Đây là bằng chứng thực nghiệm trực tiếp cho giới hạn cấu trúc đã ghi trong
-`domain_age.py`**: CAIDA/WEIS 2025 ước tính ~34% domain phishing là domain hợp
-pháp bị chiếm (đã tồn tại lâu năm) — không thể phân biệt với domain hợp pháp thật
-chỉ bằng tuổi đăng ký, dù đặt ngưỡng ở đâu.
+Coi tuổi domain (đảo dấu) là 1 điểm số rủi ro duy nhất, đường cong (FPR, TPR)
+quét theo T chính là đường cong ROC của riêng đặc trưng `domain_age`.
 
 ---
 
-## 3. Ngưỡng áp dụng — Tầng 2 dự phòng
+## 2. Kết quả
 
-Vì Tầng 1 bất khả thi, đảo ràng buộc: trong các ngưỡng đạt **Precision ≥ 95%**
-(ngang mức tin cậy của mốc 90 ngày cũ), chọn ngưỡng cho **Recall lớn nhất**.
+**AUC của riêng đặc trưng domain_age: 0,7351** — có tín hiệu phân biệt thật
+(0,5 = ngẫu nhiên), nhưng không mạnh, đúng như importance của nó trong RF/XGBoost
+(không phải đặc trưng mạnh nhất).
 
-| | Mốc cũ (90 ngày, chọn tuỳ ý) | **Mốc mới (900 ngày, Tầng 2)** |
-|---|---|---|
-| Precision | 0,9569 | 0,9509 (**−0,6 điểm**, không đáng kể) |
-| Recall | 0,0470 | **0,1970 (gấp ~4,2 lần)** |
-| F2 | 0,0581 | 0,2341 |
+| T (ngày) | Sensitivity | Specificity | Youden's J | Precision |
+|---|---|---|---|---|
+| 30 | 0,028 | 1,000 | 0,028 | 1,000 |
+| 90 | 0,047 | 0,998 | 0,045 | 0,957 |
+| 365 | 0,120 | 0,994 | 0,113 | 0,948 |
+| 900 | 0,197 | 0,990 | 0,187 | 0,951 |
+| 2.000 | 0,345 | 0,937 | 0,282 | 0,842 |
+| 3.000 | 0,453 | 0,853 | 0,306 | 0,750 |
+| **4.005 (chọn)** | **0,599** | **0,767** | **0,366** | **0,714** |
+| 5.000 | 0,666 | 0,676 | 0,342 | 0,666 |
 
-→ **`NGUONG_TUOI_MOI_NGAY` trong `src/override/domain_age.py` đổi 90 → 900**:
-cùng mức tin cậy khi luật này báo "non", bắt được phishing nhiều hơn hẳn.
+→ **Ngưỡng áp dụng: T = 4.005 ngày (~11 năm)** — Youden's J đạt cực đại duy
+nhất tại đây (không có ngưỡng nào khác đồng hạng). Tại điểm này: Sensitivity
+(Recall) 0,5994, Specificity 0,7668, Precision 0,7136.
+
+**`NGUONG_TUOI_MOI_NGAY` trong `src/override/domain_age.py` = 4005.**
 
 ---
 
-## 4. Giới hạn — đọc trước khi dùng số này để báo cáo
+## 3. Giới hạn — đọc trước khi dùng số này để báo cáo
 
-1. **Hiệu chỉnh trên tập TRAIN cân bằng 50/50** (Hannousse & Yahiouche) — Precision
-   đo trên tập này **lạc quan hơn nhiều** so với traffic thật (>99% hợp pháp).
-   **Đây là ngưỡng khởi động có căn cứ dữ liệu, KHÔNG PHẢI ngưỡng cuối** — phải
-   hiệu chỉnh lại ở Tuần 6 trên traffic mô phỏng 95% Tranco / 5% phishing, đúng
-   nguyên tắc đã áp dụng cho `CLF_LOW_RISK_THRESHOLD_DEFAULT` (ngưỡng phân vùng).
-2. **Recall 19,7% vẫn thấp về số tuyệt đối** — luật domain_age đơn lẻ chỉ là 1
-   trong 3 luật Override + mô hình Lớp B; không kỳ vọng luật này một mình bắt hết
-   phishing (đúng thiết kế "chạy song song", không phải gate riêng).
-3. **-2/-12 (56 dòng) là lỗi tính ngày của script gốc**, không phải tín hiệu thật
+1. **Hiệu chỉnh trên tập TRAIN cân bằng 50/50** (Hannousse & Yahiouche) — Specificity
+   và Precision đo trên tập này **lạc quan hơn nhiều** so với traffic thật (>99%
+   hợp pháp). **Đây là ngưỡng khởi động có căn cứ dữ liệu, KHÔNG PHẢI ngưỡng
+   cuối** — phải hiệu chỉnh lại ở Tuần 6 trên traffic mô phỏng 95% Tranco / 5%
+   phishing, đúng nguyên tắc đã áp dụng cho `CLF_LOW_RISK_THRESHOLD_DEFAULT`
+   (ngưỡng phân vùng).
+2. **Youden's J cân bằng Sensitivity/Specificity ngang nhau** — không đặt trọng
+   số ưu tiên Recall hay Precision. Nếu nghiệp vụ muốn ưu tiên 1 phía (ví dụ bắt
+   buộc Recall tối thiểu), cần đổi tiêu chí chọn khác trên cùng bảng
+   `quet_nguong.csv` (đã có đủ Sensitivity/Specificity/Precision từng T).
+3. **AUC 0,7351 không cao** — domain_age đơn lẻ chỉ là 1 trong 3 luật Override +
+   mô hình Lớp B; không kỳ vọng luật này một mình phân loại tốt (đúng thiết kế
+   "chạy song song", không phải gate riêng).
+4. **-2/-12 (56 dòng) là lỗi tính ngày của script gốc**, không phải tín hiệu thật
    — loại đúng, không phải lựa chọn tuỳ tiện.
